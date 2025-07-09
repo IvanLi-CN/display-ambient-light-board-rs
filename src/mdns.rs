@@ -50,54 +50,20 @@ impl<'a> MdnsManager<'a> {
 
     /// Start mDNS service advertisement with real implementation
     pub fn start_service(&mut self, ip_address: [u8; 4]) -> Result<(), BoardError> {
-        println!("[MDNS] Starting real mDNS service...");
-        println!("[MDNS] Service name: {}", self.service_name.as_str());
-        println!("[MDNS] Hostname: {}", self.hostname.as_str());
-        println!(
-            "[MDNS] IP address: {}.{}.{}.{}",
-            ip_address[0], ip_address[1], ip_address[2], ip_address[3]
-        );
-        println!("[MDNS] Port: {}", config::UDP_PORT);
-
         self.ip_address = Some(ip_address);
         self.is_running = true;
 
         // 创建mDNS服务定义
-        if let Some(_service) = self.create_service() {
-            println!("[MDNS] ✅ Service definition created successfully");
-            println!("[MDNS] Service type: _ambient_light._udp.local.");
-            println!("[MDNS] Instance name: board-rs._ambient_light._udp.local.");
-        } else {
-            println!("[MDNS] ❌ Failed to create service definition");
+        if self.create_service().is_none() {
             return Err(BoardError::MdnsError);
         }
 
         // 创建主机定义
-        if let Some(_host) = self.create_host() {
-            println!("[MDNS] ✅ Host definition created successfully");
-            println!("[MDNS] Hostname: board-rs.local.");
-        } else {
-            println!("[MDNS] ❌ Failed to create host definition");
+        if self.create_host().is_none() {
             return Err(BoardError::MdnsError);
         }
 
-        println!("[MDNS] 🎯 mDNS service started successfully");
-        println!(
-            "[MDNS] 📡 Service advertised as: {}",
-            self.service_name.as_str()
-        );
-        println!("[MDNS] 🔍 Clients can discover this device automatically");
-        println!(
-            "[MDNS] 🌐 Device available at: {}.{}.{}.{}:{}",
-            ip_address[0],
-            ip_address[1],
-            ip_address[2],
-            ip_address[3],
-            config::UDP_PORT
-        );
-        println!("[MDNS] 📋 Discovery commands:");
-        println!("[MDNS]   - avahi-browse -rt _ambient_light._udp");
-        println!("[MDNS]   - dns-sd -B _ambient_light._udp");
+        println!("[MDNS] Service started");
 
         Ok(())
     }
@@ -105,10 +71,8 @@ impl<'a> MdnsManager<'a> {
     /// Stop mDNS service
     pub fn stop_service(&mut self) -> Result<(), BoardError> {
         if self.is_running {
-            println!("[MDNS] Stopping mDNS service...");
             self.is_running = false;
             self.ip_address = None;
-            println!("[MDNS] mDNS service stopped");
         }
         Ok(())
     }

@@ -47,10 +47,7 @@ impl<'a> UdpServer<'a> {
 
     /// Bind to the specified port and start listening
     pub fn bind(&mut self, port: u16) -> Result<(), BoardError> {
-        println!("[UDP] Binding UDP server to port {}", port);
-
         if self.stack.is_none() {
-            println!("[UDP] Error: Network stack not set");
             return Err(BoardError::UdpError);
         }
 
@@ -58,9 +55,6 @@ impl<'a> UdpServer<'a> {
         // This is because embassy-net UDP sockets are created per-operation
         self.port = port;
         self.is_bound = true;
-
-        println!("[UDP] UDP server bound successfully to port {}", port);
-        println!("[UDP] Ready to receive LED data packets");
 
         Ok(())
     }
@@ -102,15 +96,13 @@ impl<'a> UdpServer<'a> {
         // Bind to the configured port
         match socket.bind(self.port) {
             Ok(_) => {
-                println!("[UDP] Successfully bound to port {}", self.port);
+                println!("[UDP] Listening on port {}", self.port);
             }
             Err(e) => {
-                println!("[UDP] Failed to bind to port {}: {:?}", self.port, e);
+                println!("[UDP] Bind failed: {:?}", e);
                 return Err(BoardError::UdpError);
             }
         }
-
-        println!("[UDP] UDP server listening on port {}", self.port);
 
         // Start packet reception loop
         self.packet_loop(&mut socket, led_controller, state_machine)
@@ -148,12 +140,8 @@ impl<'a> UdpServer<'a> {
             .await
             {
                 Ok(Ok((len, endpoint))) => {
-                    println!("[UDP] Received {} bytes from {:?}", len, endpoint);
-
                     // Check if this is a connection check packet
                     if Self::is_connection_check(&buffer[..len]) {
-                        println!("[UDP] ✅ Connection check packet - sending response");
-
                         // 更新最后收到连接检查的时间
                         last_connection_check = Instant::now();
 
@@ -164,38 +152,18 @@ impl<'a> UdpServer<'a> {
 
                         // Send connection response (echo back 0x01)
                         let response = [config::CONNECTION_CHECK_HEADER];
-                        match socket.send_to(&response, endpoint.endpoint).await {
-                            Ok(_) => {
-                                println!(
-                                    "[UDP] ✅ Connection response sent to {:?}",
-                                    endpoint.endpoint
-                                );
-                            }
-                            Err(e) => {
-                                println!("[UDP] ❌ Failed to send connection response: {:?}", e);
-                            }
-                        }
+                        socket.send_to(&response, endpoint.endpoint).await.ok();
                         continue; // Skip LED packet processing
                     }
 
                     // Check for 0x03 packets and ignore them completely
                     if !buffer.is_empty() && buffer[0] == 0x03 {
-                        println!(
-                            "[UDP] 🚫 Ignoring 0x03 packet ({} bytes) - not a frame sync",
-                            len
-                        );
                         continue; // Skip processing this packet entirely
                     }
 
                     // Process LED data packets
                     match Self::parse_packet(&buffer[..len]) {
                         Ok(packet) => {
-                            println!(
-                                "[UDP] ✅ Parsed LED packet: offset={}, data_len={}",
-                                packet.offset,
-                                packet.data.len()
-                            );
-
                             // Forward packet to LED controller
                             match led_controller.lock().await.update_leds(&packet) {
                                 Ok(_) => {
@@ -204,28 +172,39 @@ impl<'a> UdpServer<'a> {
                                         crate::state_machine::SystemEvent::LEDDataReceived,
                                     );
                                 }
-                                Err(e) => {
-                                    println!("[UDP] ❌ Failed to process LED packet: {:?}", e);
+                                Err(_) => {
+                                    // Silent error handling
                                 }
                             }
                         }
-                        Err(e) => {
-                            println!("[UDP] ❌ Error parsing LED packet: {:?}", e);
+                        Err(_) => {
+                            // Silent error - invalid packets are common
                         }
                     }
                 }
-                Ok(Err(e)) => {
-                    println!("[UDP] Socket error: {:?}", e);
+                Ok(Err(_)) => {
                     // Continue listening despite socket errors
                 }
                 Err(_) => {
                     // 超时 - 检查是否需要触发超时事件
                     let now = Instant::now();
                     if now.duration_since(last_connection_check) > connection_timeout {
-                        println!(
-                            "[UDP] ⚠️ Connection check timeout - no 0x01 message received for {} seconds",
-                            connection_timeout.as_secs()
-                        );
+                        static mut LAST_TIMEOUT_LOG: Option<Instant> = None;
+                        let should_log = unsafe {
+                            LAST_TIMEOUT_LOG.map_or(true, |last| {
+                                now.duration_since(last) > Duration::from_secs(30)
+                            })
+                        };
+
+                        if should_log {
+                            println!(
+                                "[UDP] ⚠️ Connection check timeout - no 0x01 message received for {} seconds",
+                                connection_timeout.as_secs()
+                            );
+                            unsafe {
+                                LAST_TIMEOUT_LOG = Some(now);
+                            }
+                        }
 
                         // 触发状态机事件：UDP超时
                         state_machine
@@ -245,7 +224,6 @@ impl<'a> UdpServer<'a> {
     pub fn receive_packet(&mut self) -> Result<Option<LedPacket>, BoardError> {
         // This method is now deprecated in favor of start_listening()
         // which provides proper async UDP reception
-        println!("[UDP] Warning: receive_packet() is deprecated, use start_listening() instead");
         Ok(None)
     }
 
@@ -270,34 +248,20 @@ impl<'a> UdpServer<'a> {
 
         // Connection check packets should be handled before calling this function
         if Self::is_connection_check(data) {
-            println!("[UDP] ❌ Connection check packet should not reach parse_packet()");
             return Err(BoardError::ProtocolError);
         }
 
         if data.len() < 3 {
-            println!(
-                "[UDP] Packet too short: {} bytes (minimum 3 required)",
-                data.len()
-            );
             return Err(BoardError::ProtocolError);
         }
 
         // Check protocol header
         if data[0] != config::PROTOCOL_HEADER {
-            println!(
-                "[UDP] Invalid header: 0x{:02x} (expected 0x{:02x})",
-                data[0],
-                config::PROTOCOL_HEADER
-            );
             return Err(BoardError::ProtocolError);
         }
 
         // Parse offset (16-bit big-endian)
         let offset = u16::from_be_bytes([data[1], data[2]]);
-        println!(
-            "[UDP] Valid LED packet: header=0x{:02x}, offset={}",
-            data[0], offset
-        );
 
         // Extract LED data
         let led_data = &data[3..];
