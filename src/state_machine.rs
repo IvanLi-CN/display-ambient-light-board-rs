@@ -280,8 +280,7 @@ impl SystemStateMachine {
                     println!("[STATE] Error state: {:?}", new_state);
                 }
                 SystemState::UDPListening => {
-                    // Reset mDNS flag when entering UDPListening state
-                    self.mdns_started = false;
+                    // Don't reset mDNS flag - it should persist across state transitions
                 }
                 _ => {} // Silent for normal transitions
             }
