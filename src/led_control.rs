@@ -2,7 +2,6 @@ use crate::BoardError;
 use alloc::vec;
 use esp_hal::gpio::Level;
 use esp_hal::rmt::{PulseCode, TxChannel};
-use esp_println::println;
 
 /// LED status states for visual feedback
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,7 +73,6 @@ where
     /// Update the LED status
     pub fn set_status(&mut self, status: LedStatus) {
         if self.status != status {
-            println!("[LED] Status changed: {:?} -> {:?}", self.status, status);
             self.status = status;
             self.status_counter = 0; // Reset counter for new status
         }
@@ -179,30 +177,14 @@ where
             led_data[offset + 3] = brightness; // W
         }
 
-        println!(
-            "[LED] Status: {:?}, Status On: {}, Breathing: {} (range {}-{}), Pattern: {} bytes ({} LEDs total)",
-            self.status,
-            status_on,
-            breathing_brightness,
-            BREATHING_MIN,
-            BREATHING_MAX,
-            led_data.len(),
-            LED_COUNT
-        );
+        // Silent LED status update
 
         // Forward the data to LED hardware
-        if let Err(e) = self.forward_raw_stream(&led_data) {
-            println!("[LED] ❌ Failed to update display: {:?}", e);
-        }
+        self.forward_raw_stream(&led_data).ok(); // Silent error handling
     }
 
     /// Forward raw LED data stream to hardware
     pub fn forward_raw_stream(&mut self, data: &[u8]) -> Result<(), BoardError> {
-        println!(
-            "[LED] 🚀 Forwarding {} bytes of raw display stream to LED hardware",
-            data.len()
-        );
-
         // For large data, truncate to safe size for stability
         const MAX_SAFE_PULSES: usize = 4000; // Conservative limit for stable operation
         let total_pulses_needed = data.len() * 8 + 1; // 8 pulses per byte + reset
@@ -210,19 +192,8 @@ where
         let actual_data = if total_pulses_needed > MAX_SAFE_PULSES {
             let max_safe_bytes = (MAX_SAFE_PULSES - 1) / 8; // Reserve 1 pulse for reset
             let safe_bytes = max_safe_bytes & !3; // Round down to multiple of 4 (complete LEDs)
-            println!(
-                "[LED] ⚠️ Large data detected ({} bytes = {} pulses), truncating to {} bytes for stability",
-                data.len(),
-                total_pulses_needed,
-                safe_bytes
-            );
             &data[..safe_bytes]
         } else {
-            println!(
-                "[LED] 🔄 Using direct transmission for {} bytes ({} pulses)",
-                data.len(),
-                total_pulses_needed
-            );
             data
         };
 
@@ -238,33 +209,24 @@ where
 
         // Transmit data
         if let Some(channel) = self.channel.take() {
-            println!("[LED] 🔒 Starting critical section for raw stream transmission");
             match channel.transmit(&pulses) {
                 Ok(transaction) => {
                     // Use non-blocking approach to avoid infinite wait
                     match transaction.wait() {
                         Ok(channel) => {
-                            println!("[LED] ✅ Raw stream transmitted successfully");
-                            println!("[LED] 🔓 Raw stream transmission completed");
                             self.channel = Some(channel);
                             Ok(())
                         }
-                        Err((err, channel)) => {
-                            println!("[LED] ⚠️ Transmission completed with warning: {:?}", err);
-                            println!("[LED] 🔓 Raw stream transmission completed (with warning)");
+                        Err((_, channel)) => {
                             self.channel = Some(channel);
                             // Don't treat warnings as errors - LED transmission often succeeds despite warnings
                             Ok(())
                         }
                     }
                 }
-                Err(err) => {
-                    println!("[LED] ❌ Failed to start transmission: {:?}", err);
-                    Err(BoardError::LedError)
-                }
+                Err(_) => Err(BoardError::LedError),
             }
         } else {
-            println!("[LED] ❌ No RMT channel available");
             Err(BoardError::LedError)
         }
     }
@@ -303,10 +265,6 @@ where
 {
     /// Create a new universal driver board
     pub fn new(channel: TX) -> Self {
-        println!("[LED] Universal driver board initialized");
-        println!("[LED] GPIO pin: 4");
-        println!("[LED] Ready to forward raw display streams");
-
         Self {
             led_controller: LedController::new(channel),
         }
@@ -331,11 +289,6 @@ where
     pub fn update_leds(&mut self, packet: &crate::udp_server::LedPacket) -> Result<(), BoardError> {
         // For now, just forward the raw data directly
         // In a more sophisticated implementation, we could handle offset-based updates
-        println!(
-            "[LED] Received LED packet: offset={}, data_len={}",
-            packet.offset,
-            packet.data.len()
-        );
         self.forward_raw_stream(&packet.data)
     }
 }

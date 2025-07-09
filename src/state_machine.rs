@@ -116,6 +116,7 @@ pub struct SystemStateMachine {
     retry_count: u32,
     error_context: Option<ErrorContext>,
     max_retries: u32,
+    mdns_started: bool, // Track if mDNS has been started
 }
 
 impl SystemStateMachine {
@@ -128,6 +129,7 @@ impl SystemStateMachine {
             retry_count: 0,
             error_context: None,
             max_retries: 3,
+            mdns_started: false,
         }
     }
 
@@ -214,7 +216,9 @@ impl SystemStateMachine {
             }
 
             SystemState::UDPListening => {
-                actions.push(Action::StartMDNSService); // mDNS需要等待DHCP获取正确IP
+                if !self.mdns_started {
+                    actions.push(Action::StartMDNSService); // mDNS需要等待DHCP获取正确IP
+                }
                 actions.push(Action::MonitorConnection);
             }
 
@@ -450,5 +454,10 @@ impl SystemStateMachine {
         self.transition_to_state(new_state);
         self.retry_count = 0;
         self.error_context = None;
+    }
+
+    /// 标记 mDNS 服务已启动
+    pub fn mark_mdns_started(&mut self) {
+        self.mdns_started = true;
     }
 }
