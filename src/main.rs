@@ -143,16 +143,15 @@ async fn state_machine_task(
                 }
                 Action::StartMDNSService => {
                     if let Some(ip) = wifi_manager.get_ip_address() {
-                        println!("[STATE] Starting mDNS service...");
                         use board_rs::mdns::MdnsManager;
                         let mut mdns_manager = MdnsManager::new();
                         match mdns_manager.start_service(ip) {
                             Ok(_) => {
-                                println!("[MDNS] mDNS service started successfully");
-                                // mDNS启动成功，但不改变状态机状态
+                                println!("[MDNS] Service started");
+                                // Mark mDNS as started to prevent restart loops
+                                state_machine.lock().await.mark_mdns_started();
                             }
                             Err(_) => {
-                                println!("[MDNS] Failed to start mDNS service");
                                 state_machine
                                     .lock()
                                     .await
