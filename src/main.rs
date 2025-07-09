@@ -78,8 +78,6 @@ async fn state_machine_task(
 ) -> ! {
     use embassy_time::{Duration, Timer};
 
-    println!("[STATE] Starting state machine driven main task");
-
     // Initialize state machine
     {
         let mut sm = state_machine.lock().await;
@@ -102,17 +100,16 @@ async fn state_machine_task(
                     led_controller.lock().await.set_status(status);
                 }
                 Action::StartWiFiConnection => {
-                    println!("[STATE] Executing WiFi connection...");
                     match wifi_manager.connect(config::WIFI_SSID, config::WIFI_PASSWORD) {
                         Ok(_) => {
-                            println!("[WIFI] WiFi connection successful!");
+                            println!("[WIFI] Connected");
                             state_machine
                                 .lock()
                                 .await
                                 .handle_event(SystemEvent::WiFiConnected);
                         }
                         Err(_) => {
-                            println!("[WIFI] WiFi connection failed");
+                            println!("[WIFI] Connection failed");
                             state_machine
                                 .lock()
                                 .await
@@ -121,12 +118,8 @@ async fn state_machine_task(
                     }
                 }
                 Action::StartDHCPRequest => {
-                    println!("[STATE] Checking DHCP status...");
                     if let Some(ip) = wifi_manager.get_ip_address() {
-                        println!(
-                            "[DHCP] IP address obtained: {}.{}.{}.{}",
-                            ip[0], ip[1], ip[2], ip[3]
-                        );
+                        println!("[DHCP] IP: {}.{}.{}.{}", ip[0], ip[1], ip[2], ip[3]);
                         state_machine
                             .lock()
                             .await
@@ -137,14 +130,12 @@ async fn state_machine_task(
                     }
                 }
                 Action::StartNetworkServices => {
-                    println!("[STATE] Starting UDP server...");
                     state_machine
                         .lock()
                         .await
                         .handle_event(SystemEvent::UDPServerStarted);
                 }
                 Action::StartUDPServer => {
-                    println!("[STATE] UDP server already running as background task");
                     state_machine
                         .lock()
                         .await
@@ -226,8 +217,6 @@ async fn udp_server_task(
 ) {
     use board_rs::udp_server::UdpServer;
 
-    println!("[UDP] Starting UDP server task...");
-
     // Create UDP server
     let mut udp_server = UdpServer::new();
     udp_server.set_stack(stack);
@@ -235,7 +224,7 @@ async fn udp_server_task(
     // Bind to the configured port
     match udp_server.bind(config::UDP_PORT) {
         Ok(_) => {
-            println!("[UDP] UDP server bound to port {}", config::UDP_PORT);
+            println!("[UDP] Listening on port {}", config::UDP_PORT);
 
             // Start listening for packets
             match udp_server
@@ -243,15 +232,15 @@ async fn udp_server_task(
                 .await
             {
                 Ok(_) => {
-                    println!("[UDP] UDP server stopped unexpectedly");
+                    println!("[UDP] Server stopped");
                 }
                 Err(e) => {
-                    println!("[UDP] UDP server error: {:?}", e);
+                    println!("[UDP] Error: {:?}", e);
                 }
             }
         }
         Err(e) => {
-            println!("[UDP] Failed to bind UDP server: {:?}", e);
+            println!("[UDP] Bind failed: {:?}", e);
         }
     }
 }
@@ -263,8 +252,6 @@ async fn mdns_server_task(stack: &'static Stack<'static>) {
     use embassy_net::{IpAddress, IpEndpoint};
     use embassy_time::{Duration, Timer};
 
-    println!("[MDNS] Starting mDNS server task...");
-
     // Wait for network to be ready
     stack.wait_config_up().await;
     Timer::after(Duration::from_secs(2)).await;
@@ -273,23 +260,11 @@ async fn mdns_server_task(stack: &'static Stack<'static>) {
     let config = stack.config_v4();
     if let Some(config) = config {
         let our_ip = config.address.address();
-        println!(
-            "[MDNS] Our IP: {}.{}.{}.{}",
-            our_ip.octets()[0],
-            our_ip.octets()[1],
-            our_ip.octets()[2],
-            our_ip.octets()[3]
-        );
 
         // Join mDNS multicast group (224.0.0.251)
         let mdns_multicast_addr = IpAddress::v4(224, 0, 0, 251);
-        match stack.join_multicast_group(mdns_multicast_addr) {
-            Ok(_) => {
-                println!("[MDNS] ✅ Successfully joined mDNS multicast group 224.0.0.251");
-            }
-            Err(e) => {
-                println!("[MDNS] ❌ Failed to join mDNS multicast group: {:?}", e);
-            }
+        if stack.join_multicast_group(mdns_multicast_addr).is_err() {
+            return; // Silent failure for mDNS
         }
 
         // Create UDP socket for mDNS
@@ -308,18 +283,12 @@ async fn mdns_server_task(stack: &'static Stack<'static>) {
         // Bind to mDNS port (5353)
         match socket.bind(5353) {
             Ok(_) => {
-                println!("[MDNS] ✅ mDNS socket bound to port 5353");
-
                 // Create mDNS response packet
                 let response = create_mdns_response(our_ip, board_rs::config::UDP_PORT);
                 let mdns_multicast = IpEndpoint::new(mdns_multicast_addr, 5353);
 
                 // Send initial mDNS announcement
-                println!("[MDNS] Sending initial mDNS announcement...");
-                match socket.send_to(&response, mdns_multicast).await {
-                    Ok(_) => println!("[MDNS] ✅ Initial announcement sent"),
-                    Err(e) => println!("[MDNS] ❌ Failed to send initial announcement: {:?}", e),
-                }
+                socket.send_to(&response, mdns_multicast).await.ok();
 
                 let mut last_announcement = embassy_time::Instant::now();
 
@@ -330,12 +299,10 @@ async fn mdns_server_task(stack: &'static Stack<'static>) {
                     // Send periodic announcements every 30 seconds
                     let now = embassy_time::Instant::now();
                     if now.duration_since(last_announcement) > Duration::from_secs(30) {
-                        println!("[MDNS] Sending periodic mDNS announcement");
+                        // Silent periodic announcement
                         match socket.send_to(&response, mdns_multicast).await {
-                            Ok(_) => println!("[MDNS] ✅ Periodic announcement sent"),
-                            Err(e) => {
-                                println!("[MDNS] ❌ Failed to send periodic announcement: {:?}", e)
-                            }
+                            Ok(_) => {}  // Silent success
+                            Err(_) => {} // Silent error - mDNS is not critical
                         }
                         last_announcement = now;
                     }
@@ -348,46 +315,25 @@ async fn mdns_server_task(stack: &'static Stack<'static>) {
                     .await
                     {
                         Ok(Ok((len, endpoint))) => {
-                            println!("[MDNS] Received {} bytes from {:?}", len, endpoint);
-
                             // Simple mDNS query detection and response
                             if len > 12 {
                                 // Check if this is a query (QR bit = 0)
                                 if (buffer[2] & 0x80) == 0 {
-                                    println!("[MDNS] 📡 Detected mDNS query, sending response");
-
                                     // Create response with matching transaction ID
                                     let mut query_response = response.clone();
                                     query_response[0] = buffer[0]; // Copy transaction ID
                                     query_response[1] = buffer[1];
 
                                     // Send mDNS response to multicast address
-                                    match socket.send_to(&query_response, mdns_multicast).await {
-                                        Ok(_) => println!(
-                                            "[MDNS] ✅ Sent mDNS response to multicast address"
-                                        ),
-                                        Err(e) => println!(
-                                            "[MDNS] ❌ Failed to send multicast response: {:?}",
-                                            e
-                                        ),
-                                    }
+                                    socket.send_to(&query_response, mdns_multicast).await.ok();
 
                                     // Also send unicast response for compatibility
-                                    match socket.send_to(&query_response, endpoint).await {
-                                        Ok(_) => println!(
-                                            "[MDNS] ✅ Sent unicast response to {:?}",
-                                            endpoint
-                                        ),
-                                        Err(e) => println!(
-                                            "[MDNS] ❌ Failed to send unicast response: {:?}",
-                                            e
-                                        ),
-                                    }
+                                    socket.send_to(&query_response, endpoint).await.ok();
                                 }
                             }
                         }
-                        Ok(Err(e)) => {
-                            println!("[MDNS] Socket error: {:?}", e);
+                        Ok(Err(_)) => {
+                            // Silent socket error - mDNS is not critical
                         }
                         Err(_) => {
                             // Timeout - normal, continue loop
@@ -395,12 +341,10 @@ async fn mdns_server_task(stack: &'static Stack<'static>) {
                     }
                 }
             }
-            Err(e) => {
-                println!("[MDNS] ❌ Failed to bind mDNS socket: {:?}", e);
+            Err(_) => {
+                // Silent failure for mDNS
             }
         }
-    } else {
-        println!("[MDNS] ❌ No IPv4 configuration available");
     }
 }
 
@@ -532,16 +476,12 @@ fn main() -> ! {
     let rng = Rng::new(peripherals.RNG);
     let wifi_init = esp_wifi::init(timer_group1.timer0, rng, peripherals.RADIO_CLK).unwrap();
 
-    println!("[WIFI] WiFi driver initialized successfully");
-
     // Store wifi_init in static cell for 'static lifetime
     let wifi_init_ref = WIFI_INIT_CELL.init(wifi_init);
 
     // Create WiFi controller and device using esp-wifi 0.14.1 API with embassy-net support
     let (wifi_controller, wifi_interfaces) = wifi::new(wifi_init_ref, peripherals.WIFI).unwrap();
     let wifi_device = wifi_interfaces.sta;
-
-    println!("[WIFI] WiFi controller and device created successfully");
 
     // Create embassy-net stack with DHCP configuration
     static STACK_RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
@@ -551,8 +491,6 @@ fn main() -> ! {
 
     let (stack, runner) = embassy_net::new(wifi_device, config, stack_resources, 1234);
 
-    println!("[WIFI] Embassy-net stack created with DHCP configuration");
-
     // Create WiFi manager with controller
     use board_rs::wifi::WiFiManager;
     let mut wifi_manager = WiFiManager::new(wifi_controller);
@@ -561,64 +499,34 @@ fn main() -> ! {
     let stack_ref = STACK_CELL.init(stack);
     wifi_manager.set_stack(*stack_ref);
 
-    println!("[WIFI] WiFi manager created successfully with real DHCP stack");
-    println!("[WIFI] Embassy-net WiFi initialization completed");
-
     // Initialize LED controller with WS2812 hardware driver
-    println!("[LED] Initializing LED controller...");
-
-    // Initialize GPIO and RMT for WS2812 LED control
-    println!(
-        "[LED] Setting up GPIO pin {} for LED data...",
-        config::LED_DATA_PIN
-    );
-
-    // First, test basic GPIO functionality
-    println!("[LED] 🔧 Testing basic GPIO4 functionality...");
     use esp_hal::gpio::{Level, Output, OutputConfig};
     let mut test_pin = Output::new(peripherals.GPIO4, Level::Low, OutputConfig::default());
 
-    // Toggle GPIO4 a few times to test basic functionality
-    for i in 0..5 {
+    // Quick GPIO test
+    for _ in 0..3 {
         test_pin.set_high();
-        println!("[LED] GPIO4 set HIGH (iteration {})", i + 1);
-        // Small delay (busy wait)
-        for _ in 0..1000000 {
+        for _ in 0..500000 {
             unsafe {
                 core::ptr::read_volatile(&0u32);
             }
         }
-
         test_pin.set_low();
-        println!("[LED] GPIO4 set LOW (iteration {})", i + 1);
-        // Small delay (busy wait)
-        for _ in 0..1000000 {
+        for _ in 0..500000 {
             unsafe {
                 core::ptr::read_volatile(&0u32);
             }
         }
     }
-    println!("[LED] ✅ Basic GPIO4 toggle test completed");
 
     // Now reconfigure for RMT use
     let led_pin = test_pin.into_peripheral_output(); // Convert back to peripheral for RMT use
 
     // Initialize RMT peripheral with 10MHz frequency for better WS2812 timing
-    println!("[LED] Initializing RMT peripheral...");
-    let frequency = Rate::from_mhz(10); // Further reduced from 20MHz for better WS2812 compatibility
-    let rmt = match Rmt::new(peripherals.RMT, frequency) {
-        Ok(rmt) => {
-            println!("[LED] RMT peripheral initialized successfully at 10MHz");
-            rmt
-        }
-        Err(e) => {
-            println!("[LED] ❌ Failed to initialize RMT: {:?}", e);
-            panic!("RMT initialization failed");
-        }
-    };
+    let frequency = Rate::from_mhz(10);
+    let rmt = Rmt::new(peripherals.RMT, frequency).unwrap();
 
     // Configure RMT channel for RGBW control
-    println!("[LED] Configuring RMT channel for RGBW control...");
     let tx_config = esp_hal::rmt::TxChannelConfig::default()
         .with_clk_divider(1)
         .with_idle_output_level(esp_hal::gpio::Level::Low)
@@ -628,29 +536,21 @@ fn main() -> ! {
     let rmt_channel = rmt.channel0.configure(led_pin, tx_config).unwrap();
 
     // Create LED controller with RMT channel
-    println!("[LED] Creating LED controller with RMT channel...");
     use board_rs::led_control::UniversalDriverBoard;
     let led_controller = UniversalDriverBoard::new(rmt_channel);
-
-    println!("[LED] ✅ Universal driver board initialized successfully");
 
     // Create static references for embassy tasks
     let wifi_manager = WIFI_MANAGER_CELL.init(wifi_manager);
     let led_controller = LED_CONTROLLER_CELL.init(Mutex::new(led_controller));
 
     // Initialize system state machine
-    println!("[STATE] Initializing system state machine...");
     let state_machine = SystemStateMachine::new();
     let state_machine = STATE_MACHINE_CELL.init(Mutex::new(state_machine));
-    println!("[STATE] System state machine initialized successfully");
 
     // Initialize embassy executor and run tasks
     let executor = EXECUTOR.init(Executor::new());
     executor.run(|spawner| {
-        println!("[MAIN] Spawning network task...");
         spawner.spawn(net_task(runner)).ok();
-
-        println!("[MAIN] Spawning state machine task...");
         spawner
             .spawn(state_machine_task(
                 wifi_manager,
@@ -659,16 +559,9 @@ fn main() -> ! {
                 state_machine,
             ))
             .ok();
-
-        println!("[MAIN] Spawning UDP server task...");
         spawner
             .spawn(udp_server_task(stack_ref, led_controller, state_machine))
             .ok();
-
-        println!("[MAIN] Spawning mDNS server task...");
-        match spawner.spawn(mdns_server_task(stack_ref)) {
-            Ok(_) => println!("[MAIN] ✅ mDNS task spawned successfully"),
-            Err(e) => println!("[MAIN] ❌ Failed to spawn mDNS task: {:?}", e),
-        }
+        spawner.spawn(mdns_server_task(stack_ref)).ok();
     });
 }

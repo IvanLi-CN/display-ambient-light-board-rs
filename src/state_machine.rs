@@ -121,7 +121,6 @@ pub struct SystemStateMachine {
 impl SystemStateMachine {
     /// 创建新的状态机实例
     pub fn new() -> Self {
-        println!("[STATE] System state machine initialized");
         Self {
             current_state: SystemState::SystemInit,
             previous_state: None,
@@ -167,11 +166,6 @@ impl SystemStateMachine {
 
     /// 处理系统事件
     pub fn handle_event(&mut self, event: SystemEvent) -> StateTransition {
-        println!(
-            "[STATE] 处理事件: {:?} (当前状态: {:?})",
-            event, self.current_state
-        );
-
         let transition = self.get_state_transition(self.current_state, event);
 
         match transition {
@@ -179,15 +173,11 @@ impl SystemStateMachine {
                 self.transition_to_state(new_state);
             }
             StateTransition::TransitionWithReset(new_state) => {
-                if self.retry_count > 0 {
-                    println!("[STATE] 重置重试计数: {} -> 0", self.retry_count);
-                }
                 self.retry_count = 0;
                 self.transition_to_state(new_state);
             }
             StateTransition::Stay => {
                 // 保持当前状态，可能需要更新重试计数
-                println!("[STATE] 保持当前状态: {:?}", self.current_state);
             }
         }
 
@@ -278,25 +268,13 @@ impl SystemStateMachine {
     /// 内部状态转换逻辑
     fn transition_to_state(&mut self, new_state: SystemState) {
         if new_state != self.current_state {
-            println!(
-                "[STATE] 状态转换: {:?} -> {:?}",
-                self.current_state, new_state
-            );
-
-            // 打印状态转换的详细信息
+            // Only print critical state changes
             match new_state {
-                SystemState::WiFiConnecting => println!("[STATE] 开始WiFi连接..."),
-                SystemState::DHCPRequesting => println!("[STATE] 开始DHCP请求..."),
-                SystemState::NetworkReady => println!("[STATE] 网络就绪，准备启动UDP服务"),
-                SystemState::UDPStarting => println!("[STATE] 启动UDP服务器..."),
-                SystemState::UDPListening => println!("[STATE] UDP服务器监听中，等待0x01消息"),
-                SystemState::Operational => println!("[STATE] 系统正常运行"),
-                SystemState::UDPTimeout => println!("[STATE] UDP超时，长时间未收到0x01消息"),
-                SystemState::WiFiError => println!("[STATE] WiFi连接错误"),
-                SystemState::DHCPError => println!("[STATE] DHCP获取IP失败"),
-                SystemState::UDPError => println!("[STATE] UDP服务启动失败"),
-                SystemState::Reconnecting => println!("[STATE] WiFi重新连接中..."),
-                _ => {}
+                SystemState::Operational => println!("[STATE] System operational"),
+                SystemState::WiFiError | SystemState::DHCPError | SystemState::UDPError => {
+                    println!("[STATE] Error state: {:?}", new_state);
+                }
+                _ => {} // Silent for normal transitions
             }
 
             self.previous_state = Some(self.current_state);
@@ -421,18 +399,11 @@ impl SystemStateMachine {
     /// 增加重试计数
     pub fn increment_retry(&mut self) {
         self.retry_count += 1;
-        println!(
-            "[STATE] Retry count: {}/{}",
-            self.retry_count, self.max_retries
-        );
     }
 
     /// 重置重试计数
     pub fn reset_retry_count(&mut self) {
-        if self.retry_count > 0 {
-            println!("[STATE] Reset retry count from {}", self.retry_count);
-            self.retry_count = 0;
-        }
+        self.retry_count = 0;
     }
 
     /// 设置错误上下文
@@ -443,7 +414,6 @@ impl SystemStateMachine {
             error_count: self.retry_count,
             last_good_state,
         });
-        println!("[STATE] Error context set: {:?}", self.error_context);
     }
 
     /// 获取错误上下文
@@ -453,10 +423,7 @@ impl SystemStateMachine {
 
     /// 清除错误上下文
     pub fn clear_error_context(&mut self) {
-        if self.error_context.is_some() {
-            println!("[STATE] Error context cleared");
-            self.error_context = None;
-        }
+        self.error_context = None;
     }
 
     /// 检查是否处于错误状态
@@ -480,10 +447,6 @@ impl SystemStateMachine {
 
     /// 强制转换到指定状态（用于紧急情况）
     pub fn force_transition(&mut self, new_state: SystemState) {
-        println!(
-            "[STATE] Force transition: {:?} -> {:?}",
-            self.current_state, new_state
-        );
         self.transition_to_state(new_state);
         self.retry_count = 0;
         self.error_context = None;
