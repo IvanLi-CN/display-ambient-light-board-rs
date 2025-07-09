@@ -216,8 +216,9 @@ impl SystemStateMachine {
             }
 
             SystemState::UDPListening => {
+                // Start mDNS service only once when first entering this state
                 if !self.mdns_started {
-                    actions.push(Action::StartMDNSService); // mDNS需要等待DHCP获取正确IP
+                    actions.push(Action::StartMDNSService);
                 }
                 actions.push(Action::MonitorConnection);
             }
@@ -277,6 +278,10 @@ impl SystemStateMachine {
                 SystemState::Operational => println!("[STATE] System operational"),
                 SystemState::WiFiError | SystemState::DHCPError | SystemState::UDPError => {
                     println!("[STATE] Error state: {:?}", new_state);
+                }
+                SystemState::UDPListening => {
+                    // Reset mDNS flag when entering UDPListening state
+                    self.mdns_started = false;
                 }
                 _ => {} // Silent for normal transitions
             }
