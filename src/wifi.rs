@@ -3,11 +3,11 @@
 //! Handles WiFi network connection using esp-wifi 0.14.1 with embassy-net DHCP
 
 use crate::{BoardError, config};
-use esp_wifi::wifi::{WifiController, ClientConfiguration, AuthMethod};
-use esp_println::println;
 use alloc::string::{String, ToString};
-use heapless::Vec;
 use embassy_net::Stack;
+use esp_println::println;
+use esp_wifi::wifi::{AuthMethod, ClientConfiguration, WifiController};
+use heapless::Vec;
 
 /// DHCP configuration information
 #[derive(Debug, Clone)]
@@ -51,11 +51,14 @@ impl<'a> WiFiManager<'a> {
             ..Default::default()
         };
 
-        self.controller.set_configuration(&esp_wifi::wifi::Configuration::Client(client_config))
+        self.controller
+            .set_configuration(&esp_wifi::wifi::Configuration::Client(client_config))
             .map_err(|_| BoardError::WiFiError)?;
 
         self.controller.start().map_err(|_| BoardError::WiFiError)?;
-        self.controller.connect().map_err(|_| BoardError::WiFiError)?;
+        self.controller
+            .connect()
+            .map_err(|_| BoardError::WiFiError)?;
 
         // Wait for connection
         let mut attempts = 0;
@@ -76,7 +79,10 @@ impl<'a> WiFiManager<'a> {
 
             Ok(())
         } else {
-            println!("[WIFI] Failed to connect to WiFi network after {} attempts", attempts);
+            println!(
+                "[WIFI] Failed to connect to WiFi network after {} attempts",
+                attempts
+            );
             Err(BoardError::WiFiError)
         }
     }
@@ -109,8 +115,10 @@ impl<'a> WiFiManager<'a> {
             if let Some(config) = stack.config_v4() {
                 let ip = config.address.address();
                 let octets = ip.octets();
-                println!("[WIFI] Real DHCP assigned IP address: {}.{}.{}.{}",
-                    octets[0], octets[1], octets[2], octets[3]);
+                println!(
+                    "[WIFI] Real DHCP assigned IP address: {}.{}.{}.{}",
+                    octets[0], octets[1], octets[2], octets[3]
+                );
                 return Some(octets);
             } else {
                 println!("[WIFI] DHCP configuration not yet available");
@@ -164,20 +172,32 @@ impl<'a> WiFiManager<'a> {
     pub fn print_dhcp_info(&self) {
         if let Some(info) = self.get_dhcp_info() {
             println!("[DHCP] === DHCP Configuration ===");
-            println!("[DHCP] IP Address: {}.{}.{}.{}",
-                info.ip_address[0], info.ip_address[1], info.ip_address[2], info.ip_address[3]);
+            println!(
+                "[DHCP] IP Address: {}.{}.{}.{}",
+                info.ip_address[0], info.ip_address[1], info.ip_address[2], info.ip_address[3]
+            );
 
             if let Some(gateway) = info.gateway {
-                println!("[DHCP] Gateway: {}.{}.{}.{}",
-                    gateway[0], gateway[1], gateway[2], gateway[3]);
+                println!(
+                    "[DHCP] Gateway: {}.{}.{}.{}",
+                    gateway[0], gateway[1], gateway[2], gateway[3]
+                );
             }
 
-            println!("[DHCP] Subnet Mask: {}.{}.{}.{}",
-                info.subnet_mask[0], info.subnet_mask[1], info.subnet_mask[2], info.subnet_mask[3]);
+            println!(
+                "[DHCP] Subnet Mask: {}.{}.{}.{}",
+                info.subnet_mask[0], info.subnet_mask[1], info.subnet_mask[2], info.subnet_mask[3]
+            );
 
             for (i, dns) in info.dns_servers.iter().enumerate() {
-                println!("[DHCP] DNS Server {}: {}.{}.{}.{}",
-                    i + 1, dns[0], dns[1], dns[2], dns[3]);
+                println!(
+                    "[DHCP] DNS Server {}: {}.{}.{}.{}",
+                    i + 1,
+                    dns[0],
+                    dns[1],
+                    dns[2],
+                    dns[3]
+                );
             }
             println!("[DHCP] === End Configuration ===");
         } else {
@@ -217,5 +237,8 @@ impl<'a> WiFiManager<'a> {
 
 /// Create WiFi configuration from environment variables
 pub fn create_wifi_config() -> (String, String) {
-    (config::WIFI_SSID.to_string(), config::WIFI_PASSWORD.to_string())
+    (
+        config::WIFI_SSID.to_string(),
+        config::WIFI_PASSWORD.to_string(),
+    )
 }

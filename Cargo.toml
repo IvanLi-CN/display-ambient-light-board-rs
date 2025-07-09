@@ -22,21 +22,18 @@ blocking-network-stack = { git = "https://github.com/bjoernQ/blocking-network-st
 embassy-net = { version = "0.7.0", features = ["tcp", "udp", "dhcpv4", "medium-ethernet", "multicast"] }
 embassy-time = { version = "0.4.0", features = ["generic-queue-8"] }
 embassy-executor = { version = "0.7.0", features = ["task-arena-size-32768"] }
+embassy-sync = { version = "0.7.0" }
 esp-hal-embassy = { version = "0.8.1", features = ["esp32c3"] }
 static_cell = "2.1.0"
 embedded-hal = "1.0.0"
-
-[[example]]
-name = "led_test"
-path = "examples/led_test.rs"
 
 [[example]]
 name = "led_test_minimal"
 path = "examples/led_test_minimal.rs"
 
 [[example]]
-name = "led_test_rgbw"
-path = "examples/led_test_rgbw.rs"
+name = "led_refresh_test"
+path = "examples/led_refresh_test.rs"
 
 [build-dependencies]
 dotenvy = "0.15.7"

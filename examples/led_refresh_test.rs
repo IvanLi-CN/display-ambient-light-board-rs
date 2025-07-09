@@ -13,10 +13,10 @@ extern crate alloc;
 use esp_alloc as _;
 
 use esp_hal::{
-    gpio::{Level, Output, OutputConfig},
-    rmt::{Rmt, TxChannelConfig, TxChannelCreator, PulseCode},
-    time::Rate,
     delay::Delay,
+    gpio::{Level, Output, OutputConfig},
+    rmt::{PulseCode, Rmt, TxChannelConfig, TxChannelCreator},
+    time::Rate,
 };
 use esp_println::println;
 
@@ -31,7 +31,10 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 
 #[derive(Clone, Copy)]
 struct RgbwColor {
-    r: u8, g: u8, b: u8, w: u8,
+    r: u8,
+    g: u8,
+    b: u8,
+    w: u8,
 }
 
 impl RgbwColor {
@@ -102,14 +105,14 @@ fn main() -> ! {
     // 8 colors: White, Yellow, Cyan, Green, Magenta, Red, Blue, Black
     // Note: Hardware uses G,R,B,W channel order, so RgbwColor::new(r,g,b,w) maps to actual G,R,B,W
     let colors = [
-        RgbwColor::new(0, 0, 0, 255),     // White (using W channel)
-        RgbwColor::new(255, 255, 0, 0),   // Yellow (R+G)
-        RgbwColor::new(0, 255, 255, 0),   // Cyan (G+B)
-        RgbwColor::new(0, 255, 0, 0),     // Green (G only)
-        RgbwColor::new(255, 0, 255, 0),   // Magenta (R+B)
-        RgbwColor::new(255, 0, 0, 0),     // Red (R only)
-        RgbwColor::new(0, 0, 255, 0),     // Blue (B only)
-        RgbwColor::new(0, 0, 0, 0),       // Black (all off)
+        RgbwColor::new(0, 0, 0, 255),   // White (using W channel)
+        RgbwColor::new(255, 255, 0, 0), // Yellow (R+G)
+        RgbwColor::new(0, 255, 255, 0), // Cyan (G+B)
+        RgbwColor::new(0, 255, 0, 0),   // Green (G only)
+        RgbwColor::new(255, 0, 255, 0), // Magenta (R+B)
+        RgbwColor::new(255, 0, 0, 0),   // Red (R only)
+        RgbwColor::new(0, 0, 255, 0),   // Blue (B only)
+        RgbwColor::new(0, 0, 0, 0),     // Black (all off)
     ];
 
     println!("🌈 Generating 200 LEDs with 8-color cycle");
@@ -130,9 +133,12 @@ fn main() -> ! {
 
         channel = match send_rgbw_data(channel, &led_data) {
             Ok(ch) => {
-                println!("✅ Refresh #{}: 200 LEDs data sent successfully", refresh_count);
+                println!(
+                    "✅ Refresh #{}: 200 LEDs data sent successfully",
+                    refresh_count
+                );
                 ch
-            },
+            }
             Err(e) => {
                 println!("❌ Refresh #{}: Failed: {:?}", refresh_count, e);
                 loop {}

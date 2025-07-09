@@ -9,6 +9,7 @@ extern crate alloc;
 
 pub mod led_control;
 pub mod mdns;
+pub mod state_machine;
 pub mod udp_server;
 pub mod wifi;
 
@@ -35,8 +36,6 @@ pub mod config {
     /// Protocol header byte for connection check packets
     pub const CONNECTION_CHECK_HEADER: u8 = 0x01;
 
-
-
     /// WiFi configuration
     /// Read from environment variables at compile time
     pub const WIFI_SSID: &str = env!("WIFI_SSID");
@@ -62,4 +61,6 @@ pub enum BoardError {
     ProtocolError,
     /// System error
     SystemError,
+    /// mDNS service error
+    MdnsError,
 }

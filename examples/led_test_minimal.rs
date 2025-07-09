@@ -1,5 +1,5 @@
 //! 最小LED测试程序 - 独立测试WS2812驱动功能
-//! 
+//!
 //! 这个程序专门用于测试WS2812 LED驱动的基本功能，
 //! 不包含WiFi、网络或其他复杂功能。
 
@@ -11,7 +11,7 @@ extern crate alloc;
 use esp_hal::{
     delay::Delay,
     gpio::{Level, Output, OutputConfig},
-    rmt::{Rmt, TxChannelConfig, TxChannelCreator, PulseCode},
+    rmt::{PulseCode, Rmt, TxChannelConfig, TxChannelCreator},
     time::Rate,
 };
 use esp_println::println;
@@ -82,10 +82,10 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 fn main() -> ! {
     let config = esp_hal::Config::default();
     let peripherals = esp_hal::init(config);
-    
+
     println!("🚀 最小LED测试程序启动");
     println!("📍 使用GPIO4作为LED数据引脚");
-    
+
     // 基本GPIO测试
     println!("🔧 测试GPIO4基本功能...");
     let mut gpio_test = Output::new(peripherals.GPIO4, Level::Low, OutputConfig::default());
@@ -93,14 +93,18 @@ fn main() -> ! {
         gpio_test.set_high();
         println!("GPIO4 HIGH ({})", i);
         // 简单延时
-        for _ in 0..1000000 { core::hint::spin_loop(); }
-        
+        for _ in 0..1000000 {
+            core::hint::spin_loop();
+        }
+
         gpio_test.set_low();
         println!("GPIO4 LOW ({})", i);
-        for _ in 0..1000000 { core::hint::spin_loop(); }
+        for _ in 0..1000000 {
+            core::hint::spin_loop();
+        }
     }
     println!("✅ GPIO4基本测试完成");
-    
+
     // 转换引脚用于RMT
     let led_pin = gpio_test.into_peripheral_output();
 
@@ -122,14 +126,14 @@ fn main() -> ! {
     let delay = Delay::new();
 
     // 定义RGBW测试颜色（正确的4字节格式）
-    let red = RgbwColor::new(255, 0, 0, 0);      // 纯红色
-    let green = RgbwColor::new(0, 255, 0, 0);    // 纯绿色
-    let blue = RgbwColor::new(0, 0, 255, 0);     // 纯蓝色
-    let white = RgbwColor::new(0, 0, 0, 255);    // 纯白色（使用W通道）
-    let black = RgbwColor::new(0, 0, 0, 0);      // 关闭
-    
+    let red = RgbwColor::new(255, 0, 0, 0); // 纯红色
+    let green = RgbwColor::new(0, 255, 0, 0); // 纯绿色
+    let blue = RgbwColor::new(0, 0, 255, 0); // 纯蓝色
+    let white = RgbwColor::new(0, 0, 0, 255); // 纯白色（使用W通道）
+    let black = RgbwColor::new(0, 0, 0, 0); // 关闭
+
     println!("🧪 开始LED测试循环...");
-    
+
     loop {
         // 测试1: 单个红色LED
         println!("🔴 测试红色LED...");
@@ -137,7 +141,7 @@ fn main() -> ! {
         let mut rgb_sequence = [RGB8::default(); 12];
         for (i, rgbw) in rgbw_colors.iter().enumerate() {
             let rgb_seq = rgbw.to_rgb_sequence();
-            rgb_sequence[i*4..(i+1)*4].copy_from_slice(&rgb_seq);
+            rgb_sequence[i * 4..(i + 1) * 4].copy_from_slice(&rgb_seq);
         }
         match led_adapter.write(rgb_sequence.iter().cloned()) {
             Ok(_) => println!("✅ 红色LED写入成功"),
@@ -151,7 +155,7 @@ fn main() -> ! {
         let mut rgb_sequence = [RGB8::default(); 12];
         for (i, rgbw) in rgbw_colors.iter().enumerate() {
             let rgb_seq = rgbw.to_rgb_sequence();
-            rgb_sequence[i*4..(i+1)*4].copy_from_slice(&rgb_seq);
+            rgb_sequence[i * 4..(i + 1) * 4].copy_from_slice(&rgb_seq);
         }
         match led_adapter.write(rgb_sequence.iter().cloned()) {
             Ok(_) => println!("✅ 绿色LED写入成功"),
@@ -165,7 +169,7 @@ fn main() -> ! {
         let mut rgb_sequence = [RGB8::default(); 12];
         for (i, rgbw) in rgbw_colors.iter().enumerate() {
             let rgb_seq = rgbw.to_rgb_sequence();
-            rgb_sequence[i*4..(i+1)*4].copy_from_slice(&rgb_seq);
+            rgb_sequence[i * 4..(i + 1) * 4].copy_from_slice(&rgb_seq);
         }
         match led_adapter.write(rgb_sequence.iter().cloned()) {
             Ok(_) => println!("✅ 蓝色LED写入成功"),
@@ -179,7 +183,7 @@ fn main() -> ! {
         let mut rgb_sequence = [RGB8::default(); 12];
         for (i, rgbw) in rgbw_colors.iter().enumerate() {
             let rgb_seq = rgbw.to_rgb_sequence();
-            rgb_sequence[i*4..(i+1)*4].copy_from_slice(&rgb_seq);
+            rgb_sequence[i * 4..(i + 1) * 4].copy_from_slice(&rgb_seq);
         }
         match led_adapter.write(rgb_sequence.iter().cloned()) {
             Ok(_) => println!("✅ 多色LED写入成功"),
@@ -193,7 +197,7 @@ fn main() -> ! {
         let mut rgb_sequence = [RGB8::default(); 12];
         for (i, rgbw) in rgbw_colors.iter().enumerate() {
             let rgb_seq = rgbw.to_rgb_sequence();
-            rgb_sequence[i*4..(i+1)*4].copy_from_slice(&rgb_seq);
+            rgb_sequence[i * 4..(i + 1) * 4].copy_from_slice(&rgb_seq);
         }
         match led_adapter.write(rgb_sequence.iter().cloned()) {
             Ok(_) => println!("✅ 全白LED写入成功"),
@@ -207,14 +211,14 @@ fn main() -> ! {
         let mut rgb_sequence = [RGB8::default(); 12];
         for (i, rgbw) in rgbw_colors.iter().enumerate() {
             let rgb_seq = rgbw.to_rgb_sequence();
-            rgb_sequence[i*4..(i+1)*4].copy_from_slice(&rgb_seq);
+            rgb_sequence[i * 4..(i + 1) * 4].copy_from_slice(&rgb_seq);
         }
         match led_adapter.write(rgb_sequence.iter().cloned()) {
             Ok(_) => println!("✅ LED关闭成功"),
             Err(e) => println!("❌ LED关闭失败: {:?}", e),
         }
         delay.delay_millis(2000);
-        
+
         println!("🔄 测试循环完成，重新开始...");
         delay.delay_millis(1000);
     }

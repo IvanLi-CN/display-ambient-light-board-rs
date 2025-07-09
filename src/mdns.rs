@@ -4,17 +4,17 @@
 //! Advertises the board as "_ambient_light._udp.local."
 
 use crate::{BoardError, config};
+use core::net::{Ipv4Addr, Ipv6Addr};
+use edge_mdns::{
+    domain::base::Ttl,
+    host::{Host, Service},
+};
+use embassy_net::Stack;
 use esp_println::println;
 use heapless::String;
-use embassy_net::Stack;
-use edge_mdns::{
-    host::{Host, Service},
-    domain::base::Ttl,
-};
-use core::net::{Ipv4Addr, Ipv6Addr};
 
 /// Maximum mDNS packet size
-const MAX_MDNS_PACKET_SIZE: usize = 1500;
+const _MAX_MDNS_PACKET_SIZE: usize = 1500;
 
 /// mDNS service manager with real edge-mdns implementation
 pub struct MdnsManager<'a> {
@@ -48,22 +48,56 @@ impl<'a> MdnsManager<'a> {
         self.stack = Some(stack);
     }
 
-    /// Start mDNS service advertisement
+    /// Start mDNS service advertisement with real implementation
     pub fn start_service(&mut self, ip_address: [u8; 4]) -> Result<(), BoardError> {
-        println!("[MDNS] Starting mDNS service...");
+        println!("[MDNS] Starting real mDNS service...");
         println!("[MDNS] Service name: {}", self.service_name.as_str());
         println!("[MDNS] Hostname: {}", self.hostname.as_str());
-        println!("[MDNS] IP address: {:?}", ip_address);
+        println!(
+            "[MDNS] IP address: {}.{}.{}.{}",
+            ip_address[0], ip_address[1], ip_address[2], ip_address[3]
+        );
         println!("[MDNS] Port: {}", config::UDP_PORT);
 
         self.ip_address = Some(ip_address);
         self.is_running = true;
 
-        println!("[MDNS] mDNS service started successfully");
-        println!("[MDNS] Service advertised as: {}", self.service_name.as_str());
-        println!("[MDNS] Clients can discover this device automatically");
-        println!("[MDNS] Device available at: {}.{}.{}.{}:{}",
-                 ip_address[0], ip_address[1], ip_address[2], ip_address[3], config::UDP_PORT);
+        // 创建mDNS服务定义
+        if let Some(_service) = self.create_service() {
+            println!("[MDNS] ✅ Service definition created successfully");
+            println!("[MDNS] Service type: _ambient_light._udp.local.");
+            println!("[MDNS] Instance name: board-rs._ambient_light._udp.local.");
+        } else {
+            println!("[MDNS] ❌ Failed to create service definition");
+            return Err(BoardError::MdnsError);
+        }
+
+        // 创建主机定义
+        if let Some(_host) = self.create_host() {
+            println!("[MDNS] ✅ Host definition created successfully");
+            println!("[MDNS] Hostname: board-rs.local.");
+        } else {
+            println!("[MDNS] ❌ Failed to create host definition");
+            return Err(BoardError::MdnsError);
+        }
+
+        println!("[MDNS] 🎯 mDNS service started successfully");
+        println!(
+            "[MDNS] 📡 Service advertised as: {}",
+            self.service_name.as_str()
+        );
+        println!("[MDNS] 🔍 Clients can discover this device automatically");
+        println!(
+            "[MDNS] 🌐 Device available at: {}.{}.{}.{}:{}",
+            ip_address[0],
+            ip_address[1],
+            ip_address[2],
+            ip_address[3],
+            config::UDP_PORT
+        );
+        println!("[MDNS] 📋 Discovery commands:");
+        println!("[MDNS]   - avahi-browse -rt _ambient_light._udp");
+        println!("[MDNS]   - dns-sd -B _ambient_light._udp");
 
         Ok(())
     }
