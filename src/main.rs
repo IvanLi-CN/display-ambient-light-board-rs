@@ -145,22 +145,9 @@ async fn state_machine_task(
                         .handle_event(SystemEvent::UDPServerStarted);
                 }
                 Action::StartMDNSService => {
-                    if let Some(ip) = wifi_manager.get_ip_address() {
-                        use board_rs::mdns::MdnsManager;
-                        let mut mdns_manager = MdnsManager::new();
-                        match mdns_manager.start_service(ip) {
-                            Ok(_) => {
-                                println!("[MDNS] Service started");
-                                // Note: We'll mark mDNS as started in the next loop iteration
-                                // to avoid deadlock with state machine mutex
-                            }
-                            Err(_) => {
-                                println!("[MDNS] Failed to start service");
-                                // Note: We'll handle this error in the next loop iteration
-                                // to avoid deadlock with state machine mutex
-                            }
-                        }
-                    }
+                    // mDNS service is handled by the dedicated mdns_server_task
+                    // Just mark the action as processed
+                    println!("[MDNS] Service start requested - handled by mdns_server_task");
                 }
                 Action::MonitorConnection => {
                     // Monitor WiFi connection without triggering state machine events
@@ -250,8 +237,12 @@ async fn mdns_server_task(stack: &'static Stack<'static>) {
 
         // Join mDNS multicast group (224.0.0.251)
         let mdns_multicast_addr = IpAddress::v4(224, 0, 0, 251);
-        if stack.join_multicast_group(mdns_multicast_addr).is_err() {
-            return; // Silent failure for mDNS
+        match stack.join_multicast_group(mdns_multicast_addr) {
+            Ok(_) => println!("[MDNS] Joined multicast group 224.0.0.251"),
+            Err(e) => {
+                println!("[MDNS] Failed to join multicast group: {:?}", e);
+                return;
+            }
         }
 
         // Create UDP socket for mDNS
@@ -270,12 +261,17 @@ async fn mdns_server_task(stack: &'static Stack<'static>) {
         // Bind to mDNS port (5353)
         match socket.bind(5353) {
             Ok(_) => {
+                println!("[MDNS] Bound to port 5353");
+
                 // Create mDNS response packet
                 let response = create_mdns_response(our_ip, board_rs::config::UDP_PORT);
                 let mdns_multicast = IpEndpoint::new(mdns_multicast_addr, 5353);
 
                 // Send initial mDNS announcement
-                socket.send_to(&response, mdns_multicast).await.ok();
+                match socket.send_to(&response, mdns_multicast).await {
+                    Ok(_) => println!("[MDNS] Initial announcement sent"),
+                    Err(e) => println!("[MDNS] Failed to send initial announcement: {:?}", e),
+                }
 
                 let mut last_announcement = embassy_time::Instant::now();
 
@@ -302,20 +298,39 @@ async fn mdns_server_task(stack: &'static Stack<'static>) {
                     .await
                     {
                         Ok(Ok((len, endpoint))) => {
+                            println!("[MDNS] Received query from {:?} ({} bytes)", endpoint, len);
+
                             // Simple mDNS query detection and response
                             if len > 12 {
                                 // Check if this is a query (QR bit = 0)
                                 if (buffer[2] & 0x80) == 0 {
+                                    println!("[MDNS] Processing mDNS query");
+
                                     // Create response with matching transaction ID
                                     let mut query_response = response.clone();
                                     query_response[0] = buffer[0]; // Copy transaction ID
                                     query_response[1] = buffer[1];
 
                                     // Send mDNS response to multicast address
-                                    socket.send_to(&query_response, mdns_multicast).await.ok();
+                                    match socket.send_to(&query_response, mdns_multicast).await {
+                                        Ok(_) => println!("[MDNS] Sent multicast response"),
+                                        Err(e) => println!(
+                                            "[MDNS] Failed to send multicast response: {:?}",
+                                            e
+                                        ),
+                                    }
 
                                     // Also send unicast response for compatibility
-                                    socket.send_to(&query_response, endpoint).await.ok();
+                                    match socket.send_to(&query_response, endpoint).await {
+                                        Ok(_) => println!(
+                                            "[MDNS] Sent unicast response to {:?}",
+                                            endpoint
+                                        ),
+                                        Err(e) => println!(
+                                            "[MDNS] Failed to send unicast response: {:?}",
+                                            e
+                                        ),
+                                    }
                                 }
                             }
                         }
@@ -328,8 +343,8 @@ async fn mdns_server_task(stack: &'static Stack<'static>) {
                     }
                 }
             }
-            Err(_) => {
-                // Silent failure for mDNS
+            Err(e) => {
+                println!("[MDNS] Failed to bind to port 5353: {:?}", e);
             }
         }
     }
