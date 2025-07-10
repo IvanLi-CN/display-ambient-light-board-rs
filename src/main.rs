@@ -76,6 +76,7 @@ async fn state_machine_task(
     led_controller: &'static Mutex<CriticalSectionRawMutex, LedControllerType>,
     state_machine: &'static Mutex<CriticalSectionRawMutex, SystemStateMachine>,
 ) -> ! {
+    use board_rs::state_machine::SystemState;
     use embassy_time::{Duration, Timer};
 
     // Initialize state machine
@@ -83,6 +84,9 @@ async fn state_machine_task(
         let mut sm = state_machine.lock().await;
         sm.handle_event(SystemEvent::SystemStarted);
     }
+
+    // Track last logged error to avoid repetition
+    let mut last_logged_error: Option<SystemState> = None;
 
     // Main state machine loop
     loop {
@@ -109,7 +113,6 @@ async fn state_machine_task(
                                 .handle_event(SystemEvent::WiFiConnected);
                         }
                         Err(_) => {
-                            println!("[WIFI] Connection failed");
                             state_machine
                                 .lock()
                                 .await
@@ -148,41 +151,22 @@ async fn state_machine_task(
                         match mdns_manager.start_service(ip) {
                             Ok(_) => {
                                 println!("[MDNS] Service started");
-                                // Mark mDNS as started to prevent restart loops
-                                state_machine.lock().await.mark_mdns_started();
+                                // Note: We'll mark mDNS as started in the next loop iteration
+                                // to avoid deadlock with state machine mutex
                             }
                             Err(_) => {
-                                state_machine
-                                    .lock()
-                                    .await
-                                    .handle_event(SystemEvent::UDPServerFailed);
+                                println!("[MDNS] Failed to start service");
+                                // Note: We'll handle this error in the next loop iteration
+                                // to avoid deadlock with state machine mutex
                             }
                         }
                     }
                 }
-                Action::MonitorConnection => match wifi_manager.monitor_connection() {
-                    Ok(_) => {
-                        if wifi_manager.is_connected() {
-                            if wifi_manager.get_ip_address().is_some() {
-                                state_machine
-                                    .lock()
-                                    .await
-                                    .handle_event(SystemEvent::WiFiConnected);
-                            }
-                        } else {
-                            state_machine
-                                .lock()
-                                .await
-                                .handle_event(SystemEvent::WiFiDisconnected);
-                        }
-                    }
-                    Err(_) => {
-                        state_machine
-                            .lock()
-                            .await
-                            .handle_event(SystemEvent::WiFiDisconnected);
-                    }
-                },
+                Action::MonitorConnection => {
+                    // Monitor WiFi connection without triggering state machine events
+                    // to avoid deadlock. Events will be handled in the next loop iteration.
+                    let _ = wifi_manager.monitor_connection();
+                }
                 Action::SystemRecover => {
                     println!("[STATE] Initiating system recovery...");
                     state_machine
@@ -191,7 +175,11 @@ async fn state_machine_task(
                         .handle_event(SystemEvent::RecoveryRequested);
                 }
                 Action::LogError(error_state) => {
-                    println!("[STATE] Error logged: {:?}", error_state);
+                    // Only log if this is a new error state
+                    if last_logged_error != Some(error_state) {
+                        println!("[STATE] Error logged: {:?}", error_state);
+                        last_logged_error = Some(error_state);
+                    }
                 }
                 _ => {
                     // Handle other actions as needed

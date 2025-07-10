@@ -117,6 +117,8 @@ pub struct SystemStateMachine {
     error_context: Option<ErrorContext>,
     max_retries: u32,
     mdns_started: bool, // Track if mDNS has been started
+    monitor_counter: u32,
+    monitor_interval: u32,
 }
 
 impl SystemStateMachine {
@@ -130,6 +132,8 @@ impl SystemStateMachine {
             error_context: None,
             max_retries: 3,
             mdns_started: false,
+            monitor_counter: 0,
+            monitor_interval: 50, // Monitor every 50 state machine cycles
         }
     }
 
@@ -190,6 +194,14 @@ impl SystemStateMachine {
     pub fn update(&mut self) -> alloc::vec::Vec<Action> {
         let mut actions = alloc::vec::Vec::new();
 
+        // Check if this is the first time entering this state
+        let is_state_entry = self.previous_state != Some(self.current_state);
+
+        // Only print state changes
+        if is_state_entry {
+            println!("[STATE] Entered state: {:?}", self.current_state);
+        }
+
         // 根据当前状态生成相应的动作
         match self.current_state {
             SystemState::SystemInit => {
@@ -217,14 +229,25 @@ impl SystemStateMachine {
 
             SystemState::UDPListening => {
                 // Start mDNS service only once when first entering this state
-                if !self.mdns_started {
+                if is_state_entry && !self.mdns_started {
                     actions.push(Action::StartMDNSService);
+                    self.mdns_started = true;
                 }
-                actions.push(Action::MonitorConnection);
+                // Monitor connection periodically, not every cycle
+                self.monitor_counter += 1;
+                if self.monitor_counter >= self.monitor_interval {
+                    actions.push(Action::MonitorConnection);
+                    self.monitor_counter = 0;
+                }
             }
 
             SystemState::Operational => {
-                actions.push(Action::MonitorConnection);
+                // Monitor connection periodically, not every cycle
+                self.monitor_counter += 1;
+                if self.monitor_counter >= self.monitor_interval {
+                    actions.push(Action::MonitorConnection);
+                    self.monitor_counter = 0;
+                }
                 actions.push(Action::ProcessLEDData);
             }
 
@@ -266,6 +289,9 @@ impl SystemStateMachine {
                 actions.push(Action::SystemRecover);
             }
         }
+
+        // Update previous_state to current_state for next iteration
+        self.previous_state = Some(self.current_state);
 
         actions
     }

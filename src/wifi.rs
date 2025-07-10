@@ -42,8 +42,6 @@ impl<'a> WiFiManager<'a> {
 
     /// Connect to WiFi network
     pub fn connect(&mut self, ssid: &str, password: &str) -> Result<(), BoardError> {
-        println!("[WIFI] Connecting to WiFi network: {}", ssid);
-
         let client_config = ClientConfiguration {
             ssid: ssid.try_into().map_err(|_| BoardError::WiFiError)?,
             password: password.try_into().map_err(|_| BoardError::WiFiError)?,
@@ -72,7 +70,7 @@ impl<'a> WiFiManager<'a> {
 
         if self.controller.is_connected().unwrap_or(false) {
             self.is_connected = true;
-            println!("[WIFI] Successfully connected to WiFi network");
+            println!("[WIFI] Successfully connected to WiFi network: {}", ssid);
 
             // Try to get DHCP IP address
             self.update_dhcp_ip();
@@ -80,8 +78,8 @@ impl<'a> WiFiManager<'a> {
             Ok(())
         } else {
             println!(
-                "[WIFI] Failed to connect to WiFi network after {} attempts",
-                attempts
+                "[WIFI] Failed to connect to WiFi network '{}' after {} attempts",
+                ssid, attempts
             );
             Err(BoardError::WiFiError)
         }
