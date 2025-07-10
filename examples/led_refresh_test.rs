@@ -1,6 +1,6 @@
-//! RGBW LED Refresh Test Firmware - 200 LEDs Refresh Test
+//! RGBW LED Refresh Test Firmware - 500 LEDs Refresh Test
 //!
-//! Tests 200 RGBW LEDs with fixed color pattern refreshed every 500ms:
+//! Tests 500 RGBW LEDs with fixed color pattern refreshed every 500ms:
 //! White, Yellow, Cyan, Green, Magenta, Red, Blue, Black (repeating)
 //! This test checks if the LED driver has flickering issues with repeated refreshes.
 //!
@@ -86,9 +86,9 @@ where
 #[esp_hal::main]
 fn main() -> ! {
     let peripherals = esp_hal::init(esp_hal::Config::default());
-    esp_alloc::heap_allocator!(size: 72 * 1024);
+    esp_alloc::heap_allocator!(size: 128 * 1024);
 
-    println!("🚀 200 LEDs Refresh Test - Every 500ms");
+    println!("🚀 500 LEDs Refresh Test - Every 500ms");
 
     let led_pin = Output::new(peripherals.GPIO4, Level::Low, OutputConfig::default())
         .into_peripheral_output();
@@ -115,10 +115,10 @@ fn main() -> ! {
         RgbwColor::new(0, 0, 0, 0),     // Black (all off)
     ];
 
-    println!("🌈 Generating 200 LEDs with 8-color cycle");
+    println!("🌈 Generating 500 LEDs with 8-color cycle");
 
-    let mut led_data = alloc::vec::Vec::with_capacity(200);
-    for i in 0..200 {
+    let mut led_data = alloc::vec::Vec::with_capacity(500);
+    for i in 0..500 {
         led_data.push(colors[i % colors.len()]);
     }
 
@@ -129,12 +129,12 @@ fn main() -> ! {
 
     loop {
         refresh_count += 1;
-        println!("🔥 Refresh #{}: Sending data to 200 LEDs...", refresh_count);
+        println!("🔥 Refresh #{}: Sending data to 500 LEDs...", refresh_count);
 
         channel = match send_rgbw_data(channel, &led_data) {
             Ok(ch) => {
                 println!(
-                    "✅ Refresh #{}: 200 LEDs data sent successfully",
+                    "✅ Refresh #{}: 500 LEDs data sent successfully",
                     refresh_count
                 );
                 ch
