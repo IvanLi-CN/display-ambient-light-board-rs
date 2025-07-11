@@ -5,6 +5,7 @@
 use crate::{BoardError, config};
 use alloc::string::{String, ToString};
 use embassy_net::Stack;
+use embassy_time::{Duration, Timer};
 use esp_println::println;
 use esp_wifi::wifi::{AuthMethod, ClientConfiguration, WifiController};
 use heapless::Vec;
@@ -40,8 +41,8 @@ impl<'a> WiFiManager<'a> {
         self.stack = Some(stack);
     }
 
-    /// Connect to WiFi network
-    pub fn connect(&mut self, ssid: &str, password: &str) -> Result<(), BoardError> {
+    /// Connect to WiFi network (async)
+    pub async fn connect(&mut self, ssid: &str, password: &str) -> Result<(), BoardError> {
         let client_config = ClientConfiguration {
             ssid: ssid.try_into().map_err(|_| BoardError::WiFiError)?,
             password: password.try_into().map_err(|_| BoardError::WiFiError)?,
@@ -58,14 +59,14 @@ impl<'a> WiFiManager<'a> {
             .connect()
             .map_err(|_| BoardError::WiFiError)?;
 
-        // Wait for connection
+        // Wait for connection with async delays
         let mut attempts = 0;
-        while !self.controller.is_connected().unwrap_or(false) && attempts < 50 {
+        const MAX_ATTEMPTS: u32 = 50;
+
+        while !self.controller.is_connected().unwrap_or(false) && attempts < MAX_ATTEMPTS {
             attempts += 1;
-            // Simple delay
-            for _ in 0..100000 {
-                core::hint::spin_loop();
-            }
+            // Async delay instead of busy waiting
+            Timer::after(Duration::from_millis(200)).await;
         }
 
         if self.controller.is_connected().unwrap_or(false) {

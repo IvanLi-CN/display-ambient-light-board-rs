@@ -104,7 +104,10 @@ async fn state_machine_task(
                     led_controller.lock().await.set_status(status);
                 }
                 Action::StartWiFiConnection => {
-                    match wifi_manager.connect(config::WIFI_SSID, config::WIFI_PASSWORD) {
+                    match wifi_manager
+                        .connect(config::WIFI_SSID, config::WIFI_PASSWORD)
+                        .await
+                    {
                         Ok(_) => {
                             println!("[WIFI] Connected");
                             state_machine
