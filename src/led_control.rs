@@ -554,9 +554,9 @@ fn update_non_atmosphere_display(
     for i in STATUS_LEDS..LED_COUNT {
         let offset = i * 4;
         let brightness = breathing_brightness as u8;
-        led_data[offset] = brightness; // G
-        led_data[offset + 1] = brightness; // R
-        led_data[offset + 2] = brightness; // B
+        led_data[offset] = 0; // G
+        led_data[offset + 1] = 0; // R
+        led_data[offset + 2] = 0; // B
         led_data[offset + 3] = brightness; // W
     }
 
