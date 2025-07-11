@@ -176,7 +176,7 @@ This state machine design aligns with real-world ESP32 network application scena
 
 - **IP Address**: Dynamically assigned via DHCP
 - **UDP Port**: 23042
-- **mDNS Service**: `_ambient_light._udp.local.`
+- **mDNS Service**: `_atmosphere_light._udp.local.`
 - **Device Hostname**: `board-rs.local.`
 
 ### Protocol Support

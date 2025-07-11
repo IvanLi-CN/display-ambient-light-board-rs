@@ -1,16 +1,16 @@
-# Board-RS: ESP32-C3 Ambient Light LED Controller
+# Board-RS: ESP32-C3 Atmosphere Light LED Controller
 
-A high-performance ESP32-C3 based universal LED driver board for ambient lighting systems, built with Rust embedded development.
+A high-performance ESP32-C3 based universal LED driver board for atmosphere lighting systems, built with Rust embedded development.
 
 ## 🚀 Project Status: **FULLY OPERATIONAL**
 
 ✅ All systems working perfectly:
 
 - WiFi connectivity with automatic DHCP configuration
-- mDNS service discovery (`_ambient_light._udp.local.:23042`)
+- mDNS service discovery (`_atmosphere_light._udp.local.:23042`)
 - UDP data reception and processing
 - LED hardware control (500 RGBW LEDs supported)
-- Desktop integration with real-time ambient lighting
+- Desktop integration with real-time atmosphere lighting
 - Performance: < 10ms latency for data transmission
 
 ## Overview
@@ -26,7 +26,7 @@ Board-RS is a complete WiFi-enabled LED hardware communication bridge that recei
 - **mDNS Service Discovery**: Automatic service advertisement for seamless device discovery
 - **UDP Communication Server**: Listens on port 23042 for LED data packets
 - **RGBW LED Control**: Direct support for SK6812 RGBW LED strips (G,R,B,W channel order)
-- **Real-time Performance**: Optimized for low-latency ambient lighting applications
+- **Real-time Performance**: Optimized for low-latency atmosphere lighting applications
 - **Status Indication**: Visual feedback via first 3 LEDs with breathing effects
 - **Robust Error Handling**: Comprehensive error recovery and logging
 
@@ -49,9 +49,9 @@ Board-RS is a complete WiFi-enabled LED hardware communication bridge that recei
 
 ## Protocol Support
 
-Supports the ambient light hardware communication protocol:
+Supports the atmosphere light hardware communication protocol:
 
-- **Service**: `_ambient_light._udp.local.`
+- **Service**: `_atmosphere_light._udp.local.`
 - **Port**: UDP 23042
 - **Header**: 0x02 (LED data packet identifier)
 - **Format**: Offset (2 bytes) + Raw RGBW data stream
@@ -82,7 +82,7 @@ cargo install espflash
 Create a `.env` file in the project root:
 
 ```bash
-# Copy the example environment file
+# Copy the example atmosphere file
 cp .env.example .env
 ```
 
@@ -93,7 +93,7 @@ WIFI_SSID=your_wifi_network_name
 WIFI_PASSWORD=your_wifi_password
 ```
 
-Alternatively, set environment variables directly:
+Alternatively, set atmosphere variables directly:
 
 ```bash
 export WIFI_SSID="your_wifi_network_name"
@@ -147,7 +147,7 @@ board-rs/
 
 ### WiFi Settings
 
-WiFi credentials are configured via environment variables in `.cargo/config.toml`:
+WiFi credentials are configured via atmosphere variables in `.cargo/config.toml`:
 
 ```toml
 [env]
@@ -194,10 +194,10 @@ espflash monitor
 Test mDNS discovery from desktop:
 ```bash
 # Linux/macOS
-avahi-browse -t _ambient_light._udp.local.
+avahi-browse -t _atmosphere_light._udp.local.
 
 # Windows
-dns-sd -B _ambient_light._udp
+dns-sd -B _atmosphere_light._udp
 ```
 
 ### UDP Communication
@@ -230,7 +230,7 @@ echo -ne '\x02\x00\x00\xFF\x00\x00\x00\xFF\x00\x00\x00\xFF' | nc -u <board_ip> 2
 ## Performance Metrics
 
 - **LED Support**: Up to 500 RGBW LEDs per strip
-- **Data Transmission**: < 10ms latency for real-time ambient lighting
+- **Data Transmission**: < 10ms latency for real-time atmosphere lighting
 - **Update Rate**: Supports high-frequency LED updates (60+ FPS)
 - **Memory Usage**: Optimized for ESP32-C3 constraints (72KB heap)
 - **Network Performance**: Stable UDP communication with chunked data support
@@ -246,7 +246,7 @@ For detailed technical information, see the documentation in the `docs/` directo
 
 ## Related Projects
 
-This ESP32 firmware is designed to work with desktop ambient lighting applications that support:
+This ESP32 firmware is designed to work with desktop atmosphere lighting applications that support:
 
 - mDNS service discovery
 - UDP communication protocol with 0x02 header

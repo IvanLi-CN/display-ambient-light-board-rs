@@ -1,4 +1,4 @@
-# ESP32-C3 Ambient Light Hardware Board Project Plan
+# ESP32-C3 Atmosphere Light Hardware Board Project Plan
 
 ## Project Overview
 
@@ -7,7 +7,7 @@ This project implements an embedded Rust firmware for ESP32-C3 microcontroller t
 ## Hardware Specifications
 
 - **MCU**: ESP32-C3 (RISC-V single-core, 160MHz)
-- **Environment**: no-std embedded Rust
+- **Atmosphere**: no-std embedded Rust
 - **Connectivity**: WiFi 802.11 b/g/n
 - **LED Output**: WS2812/WS2812B LED strips
 - **Power**: 3.3V operation
@@ -20,16 +20,19 @@ This project implements an embedded Rust firmware for ESP32-C3 microcontroller t
 - Maintain stable connection with auto-reconnect
 
 ### 2. mDNS Service Discovery
-- Advertise service as `_ambient_light._udp.local.`
+
+- Advertise service as `_atmosphere_light._udp.local.`
 - Allow desktop applications to discover the board automatically
 - Provide service information including IP address and port
 
 ### 3. UDP Communication Server
+
 - Listen on port **23042** for incoming UDP packets
 - Process LED color data packets according to protocol specification
 - No acknowledgment required (fire-and-forget protocol)
 
 ### 4. WS2812 LED Strip Control
+
 - Direct data forwarding from UDP to WS2812 controller
 - Support for both RGB (3 bytes/LED) and RGBW (4 bytes/LED) formats
 - Hardware acts as simple UDP-to-WS2812 bridge without data processing
@@ -37,6 +40,7 @@ This project implements an embedded Rust firmware for ESP32-C3 microcontroller t
 ## Communication Protocol
 
 ### Packet Format
+
 ```
 Byte 0: Header (0x02)
 Byte 1: Offset High (upper 8 bits of LED start position)
@@ -45,11 +49,13 @@ Byte 3+: LED Color Data (variable length)
 ```
 
 ### LED Data Formats
+
 - **RGB LEDs**: 3 bytes per LED `[R][G][B]`
 - **RGBW LEDs**: 4 bytes per LED `[R][G][B][W]`
 - **Value Range**: 0-255 for all color components
 
 ### Packet Processing Logic
+
 1. **Validation**: Check minimum 3 bytes and header (0x02)
 2. **Extract Offset**: Parse 16-bit LED start position (big-endian)
 3. **Forward Data**: Send color data directly to WS2812 controller
@@ -58,11 +64,13 @@ Byte 3+: LED Color Data (variable length)
 ### Example Packets
 
 **RGB Example** (3 LEDs: Red, Green, Blue at position 0):
+
 ```
 02 00 00 FF 00 00 00 FF 00 00 00 FF
 ```
 
 **RGBW Example** (2 LEDs: White, Warm White at position 10):
+
 ```
 02 00 0A FF FF FF FF FF C8 96 C8
 ```
@@ -97,7 +105,8 @@ Byte 3+: LED Color Data (variable length)
    - System monitoring
 
 ### Memory Management
-- **no-std Environment**: No heap allocation
+
+- **no-std Atmosphere**: No heap allocation
 - **Static Buffers**: Pre-allocated packet and LED data buffers
 - **Stack Usage**: Careful stack size management for embedded constraints
 

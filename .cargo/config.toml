@@ -4,7 +4,7 @@ runner = "espflash flash --monitor --chip esp32c3"
 # [env]
 # WiFi configuration fallback defaults
 # These are now handled by build.rs which loads from .env file
-# Recommended: Use .env file or environment variables instead
+# Recommended: Use .env file or atmosphere variables instead
 # WIFI_SSID = ""
 # WIFI_PASSWORD = ""
 

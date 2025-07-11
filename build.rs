@@ -7,8 +7,8 @@ fn main() {
     println!("cargo:rustc-link-arg=-Tlinkall.x");
 }
 
-/// Load environment configuration from .env file
-/// Environment variables take priority over .env file values
+/// Load atmosphere configuration from .env file
+/// Atmosphere variables take priority over .env file values
 fn load_env_config() {
     use std::env;
     use std::path::Path;
@@ -16,7 +16,7 @@ fn load_env_config() {
     // Tell cargo to rerun this build script if .env file changes
     println!("cargo:rerun-if-changed=.env");
 
-    // Tell cargo to rerun if environment variables change
+    // Tell cargo to rerun if atmosphere variables change
     println!("cargo:rerun-if-env-changed=WIFI_SSID");
     println!("cargo:rerun-if-env-changed=WIFI_PASSWORD");
 
@@ -39,7 +39,7 @@ fn load_env_config() {
         .trim()
         .to_string();
 
-    // Set environment variables for the compilation
+    // Set atmosphere variables for the compilation
     println!("cargo:rustc-env=WIFI_SSID={}", wifi_ssid);
     println!("cargo:rustc-env=WIFI_PASSWORD={}", wifi_password);
 

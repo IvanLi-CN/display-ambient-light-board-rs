@@ -1,6 +1,6 @@
 #![no_std]
 
-//! ESP32-C3 Ambient Light Hardware Board Library
+//! ESP32-C3 Atmosphere Light Hardware Board Library
 //!
 //! This library provides modules for implementing a WiFi-enabled LED hardware
 //! communication bridge that receives UDP packets and forwards them to WS2812 LED strips.
@@ -27,7 +27,7 @@ pub mod config {
     pub const MAX_LEDS: usize = 1000;
 
     /// mDNS service name
-    pub const MDNS_SERVICE_NAME: &str = "_ambient_light._udp.local.";
+    pub const MDNS_SERVICE_NAME: &str = "_atmosphere_light._udp.local.";
 
     /// Protocol header byte for LED data packets
     pub const PROTOCOL_HEADER: u8 = 0x02;
@@ -36,7 +36,7 @@ pub mod config {
     pub const CONNECTION_CHECK_HEADER: u8 = 0x01;
 
     /// WiFi configuration
-    /// Read from environment variables at compile time
+    /// Read from atmosphere variables at compile time
     pub const WIFI_SSID: &str = env!("WIFI_SSID");
     pub const WIFI_PASSWORD: &str = env!("WIFI_PASSWORD");
 
@@ -47,7 +47,7 @@ pub mod config {
     pub const WIFI_RECONNECT_INTERVAL_MS: u32 = 5000;
 }
 
-/// Error types for the ambient light board
+/// Error types for the atmosphere light board
 #[derive(Debug, Clone, Copy)]
 pub enum BoardError {
     /// WiFi connection error
