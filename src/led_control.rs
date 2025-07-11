@@ -97,19 +97,23 @@ where
         self.status_counter += 1;
         self.breathing_counter += 1;
 
-        // Breathing effect parameters (slower and lower brightness)
+        // Breathing effect parameters (5 second cycle)
         const BREATHING_MIN: u32 = 30;
-        const BREATHING_MAX: u32 = 150;
-        const BREATHING_SPEED: u32 = 3; // Slower breathing
+        const BREATHING_MAX: u32 = 180;
+        const BREATHING_SPEED: u32 = 1; // Speed for ~5 second cycle
 
-        // Calculate breathing brightness
-        let breathing_cycle =
-            (self.breathing_counter / BREATHING_SPEED) % ((BREATHING_MAX - BREATHING_MIN) * 2);
-        let breathing_brightness = if breathing_cycle < (BREATHING_MAX - BREATHING_MIN) {
-            BREATHING_MIN + breathing_cycle
-        } else {
-            BREATHING_MAX - (breathing_cycle - (BREATHING_MAX - BREATHING_MIN))
-        };
+        // Calculate breathing brightness with step size 2
+        const BREATHING_STEP: u32 = 2;
+        let breathing_cycle = (self.breathing_counter / BREATHING_SPEED)
+            % ((BREATHING_MAX - BREATHING_MIN) / BREATHING_STEP * 2);
+        let breathing_brightness =
+            if breathing_cycle < (BREATHING_MAX - BREATHING_MIN) / BREATHING_STEP {
+                BREATHING_MIN + breathing_cycle * BREATHING_STEP
+            } else {
+                BREATHING_MAX
+                    - (breathing_cycle - (BREATHING_MAX - BREATHING_MIN) / BREATHING_STEP)
+                        * BREATHING_STEP
+            };
 
         // Status indication timing (faster blinking)
         let status_on = match self.status {
@@ -470,18 +474,21 @@ fn update_non_environment_display(
     const LED_COUNT: usize = 60; // Only update first 60 LEDs to reduce transmission time
     const STATUS_LEDS: usize = 3; // First 3 LEDs for status
 
-    // Breathing effect parameters (slower and lower brightness)
-    const BREATHING_MIN: u32 = 50;
-    const BREATHING_MAX: u32 = 150;
-    const BREATHING_SPEED: u32 = 3; // Slower breathing
+    // Breathing effect parameters (5 second cycle)
+    const BREATHING_MIN: u32 = 30;
+    const BREATHING_MAX: u32 = 180;
+    const BREATHING_SPEED: u32 = 1; // Speed for ~5 second cycle
 
-    // Calculate breathing brightness
-    let breathing_cycle =
-        (state.breathing_counter / BREATHING_SPEED) % ((BREATHING_MAX - BREATHING_MIN) * 2);
-    let breathing_brightness = if breathing_cycle < (BREATHING_MAX - BREATHING_MIN) {
-        BREATHING_MIN + breathing_cycle
+    // Calculate breathing brightness with step size 2
+    const BREATHING_STEP: u32 = 2;
+    let breathing_cycle = (state.breathing_counter / BREATHING_SPEED)
+        % ((BREATHING_MAX - BREATHING_MIN) / BREATHING_STEP * 2);
+    let breathing_brightness = if breathing_cycle < (BREATHING_MAX - BREATHING_MIN) / BREATHING_STEP
+    {
+        BREATHING_MIN + breathing_cycle * BREATHING_STEP
     } else {
-        BREATHING_MAX - (breathing_cycle - (BREATHING_MAX - BREATHING_MIN))
+        BREATHING_MAX
+            - (breathing_cycle - (BREATHING_MAX - BREATHING_MIN) / BREATHING_STEP) * BREATHING_STEP
     };
 
     // Status indication timing (faster blinking)
