@@ -8,7 +8,6 @@
 extern crate alloc;
 
 pub mod led_control;
-pub mod mdns;
 pub mod state_machine;
 pub mod udp_server;
 pub mod wifi;
