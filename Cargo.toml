@@ -48,3 +48,6 @@ incremental      = false
 lto              = 'fat'
 opt-level        = 's'
 overflow-checks  = false
+
+[profile.dev.package.esp-wifi]
+opt-level = 3

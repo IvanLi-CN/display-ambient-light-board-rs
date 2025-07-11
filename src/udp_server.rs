@@ -128,10 +128,15 @@ impl<'a> UdpServer<'a> {
         let mut last_connection_check = Instant::now();
         let connection_timeout = Duration::from_secs(30); // 30秒超时
 
+        // Batch state machine events to reduce lock contention
+        let mut pending_events = heapless::Vec::<crate::state_machine::SystemEvent, 8>::new();
+        let mut last_state_update = Instant::now();
+        let state_update_interval = Duration::from_millis(100); // Update state machine every 100ms
+
         loop {
             // 使用超时接收数据
             match embassy_time::with_timeout(
-                Duration::from_millis(1000),
+                Duration::from_millis(100), // Reduced timeout for more responsive state updates
                 socket.recv_from(&mut buffer),
             )
             .await
@@ -142,10 +147,9 @@ impl<'a> UdpServer<'a> {
                         // 更新最后收到连接检查的时间
                         last_connection_check = Instant::now();
 
-                        // 触发状态机事件：收到0x01消息
-                        state_machine.lock().await.handle_event(
-                            crate::state_machine::SystemEvent::ConnectionCheckReceived,
-                        );
+                        // Queue state machine event instead of immediate lock
+                        let _ = pending_events
+                            .push(crate::state_machine::SystemEvent::ConnectionCheckReceived);
 
                         // Send connection response (echo back 0x01)
                         let response = [config::CONNECTION_CHECK_HEADER];
@@ -170,10 +174,9 @@ impl<'a> UdpServer<'a> {
                             // Send LED data to LED task via channel
                             match led_data_sender.try_send(led_data) {
                                 Ok(_) => {
-                                    // 触发状态机事件：收到LED数据
-                                    state_machine.lock().await.handle_event(
-                                        crate::state_machine::SystemEvent::LEDDataReceived,
-                                    );
+                                    // Queue state machine event instead of immediate lock
+                                    let _ = pending_events
+                                        .push(crate::state_machine::SystemEvent::LEDDataReceived);
                                 }
                                 Err(_) => {
                                     // Channel full or other error - silent handling
@@ -209,16 +212,26 @@ impl<'a> UdpServer<'a> {
                             }
                         }
 
-                        // 触发状态机事件：UDP超时
-                        state_machine
-                            .lock()
-                            .await
-                            .handle_event(crate::state_machine::SystemEvent::UDPTimeout);
+                        // Queue timeout event
+                        let _ = pending_events.push(crate::state_machine::SystemEvent::UDPTimeout);
 
                         // 重置超时计时器
                         last_connection_check = now;
                     }
                 }
+            }
+
+            // Process batched state machine events periodically
+            let now = Instant::now();
+            if !pending_events.is_empty()
+                && now.duration_since(last_state_update) >= state_update_interval
+            {
+                let mut sm = state_machine.lock().await;
+                for event in pending_events.iter() {
+                    sm.handle_event(*event);
+                }
+                pending_events.clear();
+                last_state_update = now;
             }
         }
     }

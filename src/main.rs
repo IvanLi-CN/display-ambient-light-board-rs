@@ -10,6 +10,7 @@ use esp_println::println;
 
 // Standard library imports
 extern crate alloc;
+use alloc::vec::Vec;
 
 // WiFi imports
 use esp_wifi::wifi;
@@ -118,6 +119,8 @@ async fn state_machine_task(
 
     // Track last logged error to avoid repetition
     let mut last_logged_error: Option<SystemState> = None;
+    // Track last sent LED status to avoid repetition
+    let mut last_led_status: Option<board_rs::led_control::LedStatus> = None;
 
     // Main state machine loop
     loop {
@@ -128,12 +131,18 @@ async fn state_machine_task(
             (sm.get_current_state(), actions)
         };
 
+        // Collect events to send to state machine to reduce lock contention
+        let mut events_to_send = Vec::new();
+
         // Execute actions based on state machine output
         for action in actions {
             match action {
                 Action::UpdateLEDStatus(status) => {
-                    // Send status update to LED task via channel
-                    let _ = led_status_sender.try_send(status);
+                    // Only send status update if it's different from the last one
+                    if last_led_status != Some(status) {
+                        let _ = led_status_sender.try_send(status);
+                        last_led_status = Some(status);
+                    }
                 }
                 Action::StartWiFiConnection => {
                     match wifi_manager
@@ -142,42 +151,27 @@ async fn state_machine_task(
                     {
                         Ok(_) => {
                             println!("[WIFI] Connected");
-                            state_machine
-                                .lock()
-                                .await
-                                .handle_event(SystemEvent::WiFiConnected);
+                            events_to_send.push(SystemEvent::WiFiConnected);
                         }
                         Err(_) => {
-                            state_machine
-                                .lock()
-                                .await
-                                .handle_event(SystemEvent::WiFiConnectionFailed);
+                            events_to_send.push(SystemEvent::WiFiConnectionFailed);
                         }
                     }
                 }
                 Action::StartDHCPRequest => {
                     if let Some(ip) = wifi_manager.get_ip_address() {
                         println!("[DHCP] IP: {}.{}.{}.{}", ip[0], ip[1], ip[2], ip[3]);
-                        state_machine
-                            .lock()
-                            .await
-                            .handle_event(SystemEvent::DHCPSuccess);
+                        events_to_send.push(SystemEvent::DHCPSuccess);
                     } else {
                         // Continue waiting for DHCP
                         Timer::after(Duration::from_millis(1000)).await;
                     }
                 }
                 Action::StartNetworkServices => {
-                    state_machine
-                        .lock()
-                        .await
-                        .handle_event(SystemEvent::UDPServerStarted);
+                    events_to_send.push(SystemEvent::UDPServerStarted);
                 }
                 Action::StartUDPServer => {
-                    state_machine
-                        .lock()
-                        .await
-                        .handle_event(SystemEvent::UDPServerStarted);
+                    events_to_send.push(SystemEvent::UDPServerStarted);
                 }
                 Action::StartMDNSService => {
                     // mDNS service is handled by the dedicated mdns_server_task
@@ -191,10 +185,7 @@ async fn state_machine_task(
                 }
                 Action::SystemRecover => {
                     println!("[STATE] Initiating system recovery...");
-                    state_machine
-                        .lock()
-                        .await
-                        .handle_event(SystemEvent::RecoveryRequested);
+                    events_to_send.push(SystemEvent::RecoveryRequested);
                 }
                 Action::LogError(error_state) => {
                     // Only log if this is a new error state
@@ -209,11 +200,19 @@ async fn state_machine_task(
             }
         }
 
+        // Send all collected events in a single lock acquisition
+        if !events_to_send.is_empty() {
+            let mut sm = state_machine.lock().await;
+            for event in events_to_send {
+                sm.handle_event(event);
+            }
+        }
+
         // LED display is now handled by the dedicated LED task at 30fps
         // No need to update LED display here anymore
 
-        // Small delay to prevent busy loop
-        Timer::after(Duration::from_millis(100)).await;
+        // Increase delay to reduce CPU usage and lock contention
+        Timer::after(Duration::from_millis(200)).await;
     }
 }
 
@@ -582,12 +581,12 @@ fn main() -> ! {
     let led_controller = UniversalDriverBoard::new(rmt_channel);
 
     // Create static references for embassy tasks
-    let wifi_manager = WIFI_MANAGER_CELL.init(wifi_manager);
+    let _wifi_manager = WIFI_MANAGER_CELL.init(wifi_manager);
     let led_controller = LED_CONTROLLER_CELL.init(Mutex::new(led_controller));
 
     // Initialize system state machine
     let state_machine = SystemStateMachine::new();
-    let state_machine = STATE_MACHINE_CELL.init(Mutex::new(state_machine));
+    let _state_machine = STATE_MACHINE_CELL.init(Mutex::new(state_machine));
 
     // Initialize LED communication channels
     let (
@@ -600,8 +599,8 @@ fn main() -> ! {
     ) = board_rs::led_control::init_led_channels();
 
     // Store senders in static cells for task access
-    let led_status_sender = LED_STATUS_SENDER_CELL.init(led_status_sender);
-    let led_data_sender = LED_DATA_SENDER_CELL.init(led_data_sender);
+    let _led_status_sender = LED_STATUS_SENDER_CELL.init(led_status_sender);
+    let _led_data_sender = LED_DATA_SENDER_CELL.init(led_data_sender);
     let _led_mode_sender = LED_MODE_SENDER_CELL.init(led_mode_sender);
 
     // Initialize embassy executor and run tasks
@@ -610,14 +609,14 @@ fn main() -> ! {
         spawner.spawn(net_task(runner)).ok();
         spawner
             .spawn(state_machine_task(
-                wifi_manager,
+                _wifi_manager,
                 stack_ref,
-                led_status_sender,
-                state_machine,
+                _led_status_sender,
+                _state_machine,
             ))
             .ok();
         spawner
-            .spawn(udp_server_task(stack_ref, led_data_sender, state_machine))
+            .spawn(udp_server_task(stack_ref, _led_data_sender, _state_machine))
             .ok();
         spawner.spawn(mdns_server_task(stack_ref)).ok();
         // Start the LED task at 30fps
