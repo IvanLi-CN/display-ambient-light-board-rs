@@ -55,6 +55,32 @@ static STATE_MACHINE_CELL: StaticCell<
 // Static executor for embassy tasks
 static EXECUTOR: StaticCell<Executor> = StaticCell::new();
 
+// Static cells for LED communication channels
+static LED_STATUS_SENDER_CELL: StaticCell<
+    embassy_sync::channel::Sender<
+        'static,
+        CriticalSectionRawMutex,
+        board_rs::led_control::LedStatus,
+        8,
+    >,
+> = StaticCell::new();
+static LED_DATA_SENDER_CELL: StaticCell<
+    embassy_sync::channel::Sender<
+        'static,
+        CriticalSectionRawMutex,
+        board_rs::led_control::LedData,
+        4,
+    >,
+> = StaticCell::new();
+static LED_MODE_SENDER_CELL: StaticCell<
+    embassy_sync::channel::Sender<
+        'static,
+        CriticalSectionRawMutex,
+        board_rs::led_control::LedMode,
+        2,
+    >,
+> = StaticCell::new();
+
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
     loop {}
@@ -73,7 +99,12 @@ async fn net_task(
 async fn state_machine_task(
     wifi_manager: &'static mut board_rs::wifi::WiFiManager<'static>,
     _stack: &'static Stack<'static>,
-    led_controller: &'static Mutex<CriticalSectionRawMutex, LedControllerType>,
+    led_status_sender: &'static embassy_sync::channel::Sender<
+        'static,
+        CriticalSectionRawMutex,
+        board_rs::led_control::LedStatus,
+        8,
+    >,
     state_machine: &'static Mutex<CriticalSectionRawMutex, SystemStateMachine>,
 ) -> ! {
     use board_rs::state_machine::SystemState;
@@ -101,7 +132,8 @@ async fn state_machine_task(
         for action in actions {
             match action {
                 Action::UpdateLEDStatus(status) => {
-                    led_controller.lock().await.set_status(status);
+                    // Send status update to LED task via channel
+                    let _ = led_status_sender.try_send(status);
                 }
                 Action::StartWiFiConnection => {
                     match wifi_manager
@@ -177,8 +209,8 @@ async fn state_machine_task(
             }
         }
 
-        // Always update LED display
-        led_controller.lock().await.update_display();
+        // LED display is now handled by the dedicated LED task at 30fps
+        // No need to update LED display here anymore
 
         // Small delay to prevent busy loop
         Timer::after(Duration::from_millis(100)).await;
@@ -189,7 +221,12 @@ async fn state_machine_task(
 #[embassy_executor::task]
 async fn udp_server_task(
     stack: &'static Stack<'static>,
-    led_controller: &'static Mutex<CriticalSectionRawMutex, LedControllerType>,
+    led_data_sender: &'static embassy_sync::channel::Sender<
+        'static,
+        CriticalSectionRawMutex,
+        board_rs::led_control::LedData,
+        4,
+    >,
     state_machine: &'static Mutex<CriticalSectionRawMutex, SystemStateMachine>,
 ) {
     use board_rs::udp_server::UdpServer;
@@ -205,7 +242,7 @@ async fn udp_server_task(
 
             // Start listening for packets
             match udp_server
-                .start_listening(led_controller, state_machine)
+                .start_listening(led_data_sender, state_machine)
                 .await
             {
                 Ok(_) => {
@@ -552,6 +589,21 @@ fn main() -> ! {
     let state_machine = SystemStateMachine::new();
     let state_machine = STATE_MACHINE_CELL.init(Mutex::new(state_machine));
 
+    // Initialize LED communication channels
+    let (
+        led_status_sender,
+        led_data_sender,
+        led_mode_sender,
+        led_status_receiver,
+        led_data_receiver,
+        led_mode_receiver,
+    ) = board_rs::led_control::init_led_channels();
+
+    // Store senders in static cells for task access
+    let led_status_sender = LED_STATUS_SENDER_CELL.init(led_status_sender);
+    let led_data_sender = LED_DATA_SENDER_CELL.init(led_data_sender);
+    let _led_mode_sender = LED_MODE_SENDER_CELL.init(led_mode_sender);
+
     // Initialize embassy executor and run tasks
     let executor = EXECUTOR.init(Executor::new());
     executor.run(|spawner| {
@@ -560,13 +612,22 @@ fn main() -> ! {
             .spawn(state_machine_task(
                 wifi_manager,
                 stack_ref,
-                led_controller,
+                led_status_sender,
                 state_machine,
             ))
             .ok();
         spawner
-            .spawn(udp_server_task(stack_ref, led_controller, state_machine))
+            .spawn(udp_server_task(stack_ref, led_data_sender, state_machine))
             .ok();
         spawner.spawn(mdns_server_task(stack_ref)).ok();
+        // Start the LED task at 30fps
+        spawner
+            .spawn(board_rs::led_control::led_task(
+                led_controller,
+                led_status_receiver,
+                led_data_receiver,
+                led_mode_receiver,
+            ))
+            .ok();
     });
 }

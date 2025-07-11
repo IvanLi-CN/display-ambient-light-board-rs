@@ -2,7 +2,6 @@
 //!
 //! Handles UDP socket creation, packet reception, and protocol parsing.
 
-use crate::led_control::UniversalDriverBoard;
 use crate::{BoardError, config};
 use embassy_net::{
     Stack,
@@ -60,20 +59,19 @@ impl<'a> UdpServer<'a> {
     }
 
     /// Start UDP server and listen for packets (async)
-    pub async fn start_listening<TX>(
+    pub async fn start_listening(
         &mut self,
-        led_controller: &embassy_sync::mutex::Mutex<
+        led_data_sender: &embassy_sync::channel::Sender<
+            'static,
             embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex,
-            UniversalDriverBoard<TX>,
+            crate::led_control::LedData,
+            4,
         >,
         state_machine: &embassy_sync::mutex::Mutex<
             embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex,
             crate::state_machine::SystemStateMachine,
         >,
-    ) -> Result<(), BoardError>
-    where
-        TX: esp_hal::rmt::TxChannel,
-    {
+    ) -> Result<(), BoardError> {
         if !self.is_bound {
             return Err(BoardError::UdpError);
         }
@@ -105,26 +103,25 @@ impl<'a> UdpServer<'a> {
         }
 
         // Start packet reception loop
-        self.packet_loop(&mut socket, led_controller, state_machine)
+        self.packet_loop(&mut socket, led_data_sender, state_machine)
             .await
     }
 
     /// Main packet reception loop
-    async fn packet_loop<TX>(
+    async fn packet_loop(
         &mut self,
         socket: &mut UdpSocket<'_>,
-        led_controller: &embassy_sync::mutex::Mutex<
+        led_data_sender: &embassy_sync::channel::Sender<
+            'static,
             embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex,
-            UniversalDriverBoard<TX>,
+            crate::led_control::LedData,
+            4,
         >,
         state_machine: &embassy_sync::mutex::Mutex<
             embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex,
             crate::state_machine::SystemStateMachine,
         >,
-    ) -> Result<(), BoardError>
-    where
-        TX: esp_hal::rmt::TxChannel,
-    {
+    ) -> Result<(), BoardError> {
         use embassy_time::{Duration, Instant};
 
         let mut buffer = [0u8; MAX_PACKET_SIZE];
@@ -164,8 +161,14 @@ impl<'a> UdpServer<'a> {
                     // Process LED data packets
                     match Self::parse_packet(&buffer[..len]) {
                         Ok(packet) => {
-                            // Forward packet to LED controller
-                            match led_controller.lock().await.update_leds(&packet) {
+                            // Create LED data and send to LED task
+                            let led_data = crate::led_control::LedData {
+                                data: packet.data.to_vec(),
+                                timestamp: embassy_time::Instant::now(),
+                            };
+
+                            // Send LED data to LED task via channel
+                            match led_data_sender.try_send(led_data) {
                                 Ok(_) => {
                                     // 触发状态机事件：收到LED数据
                                     state_machine.lock().await.handle_event(
@@ -173,7 +176,7 @@ impl<'a> UdpServer<'a> {
                                     );
                                 }
                                 Err(_) => {
-                                    // Silent error handling
+                                    // Channel full or other error - silent handling
                                 }
                             }
                         }
