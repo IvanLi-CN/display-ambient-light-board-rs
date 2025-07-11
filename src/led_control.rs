@@ -302,7 +302,7 @@ where
     }
 }
 
-/// LED data for atmosphere light mode
+/// LED data for ambient light mode
 #[derive(Debug, Clone)]
 pub struct LedData {
     pub data: alloc::vec::Vec<u8>,
@@ -312,10 +312,10 @@ pub struct LedData {
 /// LED operation modes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LedMode {
-    /// Non-atmosphere mode: breathing + status indication
-    NonAtmosphere,
-    /// Atmosphere mode: display UDP data
-    Atmosphere,
+    /// Non-ambient mode: breathing + status indication
+    NonAmbient,
+    /// Ambient mode: display UDP data
+    Ambient,
 }
 
 /// Static channels for LED task communication
@@ -362,19 +362,19 @@ struct LedTaskState {
     current_mode: LedMode,
     status_counter: u32,
     breathing_counter: u32,
-    last_atmosphere_data: Option<LedData>,
-    atmosphere_timeout: Duration,
+    last_ambient_data: Option<LedData>,
+    ambient_timeout: Duration,
 }
 
 impl LedTaskState {
     fn new() -> Self {
         Self {
             current_status: LedStatus::Starting,
-            current_mode: LedMode::NonAtmosphere,
+            current_mode: LedMode::NonAmbient,
             status_counter: 0,
             breathing_counter: 30, // Start at minimum brightness
-            last_atmosphere_data: None,
-            atmosphere_timeout: Duration::from_secs(5), // Switch back to non-atmosphere after 5s
+            last_ambient_data: None,
+            ambient_timeout: Duration::from_secs(5), // Switch back to non-ambient after 5s
         }
     }
 
@@ -383,9 +383,9 @@ impl LedTaskState {
         self.breathing_counter += 1;
     }
 
-    fn should_switch_to_non_atmosphere(&self) -> bool {
-        if let Some(ref data) = self.last_atmosphere_data {
-            Instant::now().duration_since(data.timestamp) > self.atmosphere_timeout
+    fn should_switch_to_non_ambient(&self) -> bool {
+        if let Some(ref data) = self.last_ambient_data {
+            Instant::now().duration_since(data.timestamp) > self.ambient_timeout
         } else {
             true
         }
@@ -421,38 +421,38 @@ pub async fn led_task(
         }
 
         while let Ok(data) = data_receiver.try_receive() {
-            state.last_atmosphere_data = Some(data);
-            // Automatically switch to atmosphere mode when data is received
-            if state.current_mode != LedMode::Atmosphere {
-                state.current_mode = LedMode::Atmosphere;
-                println!("[LED] Auto-switched to Atmosphere mode");
+            state.last_ambient_data = Some(data);
+            // Automatically switch to ambient mode when data is received
+            if state.current_mode != LedMode::Ambient {
+                state.current_mode = LedMode::Ambient;
+                println!("[LED] Auto-switched to Ambient mode");
             }
         }
 
-        // Auto-switch back to non-atmosphere mode if no recent data
-        if state.current_mode == LedMode::Atmosphere && state.should_switch_to_non_atmosphere() {
-            state.current_mode = LedMode::NonAtmosphere;
-            println!("[LED] Auto-switched to NonAtmosphere mode (timeout)");
+        // Auto-switch back to non-ambient mode if no recent data
+        if state.current_mode == LedMode::Ambient && state.should_switch_to_non_ambient() {
+            state.current_mode = LedMode::NonAmbient;
+            println!("[LED] Auto-switched to NonAmbient mode (timeout)");
         }
 
         // Update LED display based on current mode
         {
             let mut controller = led_controller.lock().await;
             match state.current_mode {
-                LedMode::NonAtmosphere => {
+                LedMode::NonAmbient => {
                     // Skip status indication when operational - but still do breathing
                     if !matches!(state.current_status, LedStatus::Operational) {
                         controller.set_status(state.current_status);
                     }
-                    update_non_atmosphere_display(&mut controller, &mut state);
+                    update_non_ambient_display(&mut controller, &mut state);
                 }
-                LedMode::Atmosphere => {
-                    if let Some(ref data) = state.last_atmosphere_data {
-                        // Display atmosphere data
+                LedMode::Ambient => {
+                    if let Some(ref data) = state.last_ambient_data {
+                        // Display ambient data
                         let _ = controller.forward_raw_stream(&data.data);
                     } else {
-                        // Fallback to non-atmosphere display
-                        update_non_atmosphere_display(&mut controller, &mut state);
+                        // Fallback to non-ambient display
+                        update_non_ambient_display(&mut controller, &mut state);
                     }
                 }
             }
@@ -466,8 +466,8 @@ pub async fn led_task(
     }
 }
 
-/// Update LED display for non-atmosphere mode (breathing + status indication)
-fn update_non_atmosphere_display(
+/// Update LED display for non-ambient mode (breathing + status indication)
+fn update_non_ambient_display(
     controller: &mut UniversalDriverBoard<esp_hal::rmt::Channel<esp_hal::Blocking, 0>>,
     state: &mut LedTaskState,
 ) {

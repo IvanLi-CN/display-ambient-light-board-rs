@@ -234,7 +234,7 @@ impl<'a> WiFiManager<'a> {
     }
 }
 
-/// Create WiFi configuration from atmosphere variables
+/// Create WiFi configuration from environment variables
 pub fn create_wifi_config() -> (String, String) {
     (
         config::WIFI_SSID.to_string(),

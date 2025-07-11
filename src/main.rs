@@ -410,8 +410,8 @@ fn create_mdns_response(ip: embassy_net::Ipv4Address, port: u16) -> [u8; 512] {
 
     let mut offset = 12;
 
-    // Record 1: PTR Record "_atmosphere_light._udp.local." -> "board-rs._atmosphere_light._udp.local."
-    let service_type_encoded = b"\x11_atmosphere_light\x04_udp\x05local\x00";
+    // Record 1: PTR Record "_ambient_light._udp.local." -> "board-rs._ambient_light._udp.local."
+    let service_type_encoded = b"\x0e_ambient_light\x04_udp\x05local\x00";
     response[offset..offset + service_type_encoded.len()].copy_from_slice(service_type_encoded);
     offset += service_type_encoded.len();
 
@@ -426,8 +426,8 @@ fn create_mdns_response(ip: embassy_net::Ipv4Address, port: u16) -> [u8; 512] {
     response[offset + 7] = 0x78; // TTL low (120 seconds)
     offset += 8;
 
-    // PTR data: "board-rs._atmosphere_light._udp.local."
-    let instance_full = b"\x08board-rs\x11_atmosphere_light\x04_udp\x05local\x00";
+    // PTR data: "board-rs._ambient_light._udp.local."
+    let instance_full = b"\x08board-rs\x0e_ambient_light\x04_udp\x05local\x00";
     response[offset] = 0x00;
     response[offset + 1] = instance_full.len() as u8; // Data length
     offset += 2;
@@ -436,7 +436,7 @@ fn create_mdns_response(ip: embassy_net::Ipv4Address, port: u16) -> [u8; 512] {
     response[offset..offset + instance_full.len()].copy_from_slice(instance_full);
     offset += instance_full.len();
 
-    // Record 2: SRV Record "board-rs._atmosphere_light._udp.local."
+    // Record 2: SRV Record "board-rs._ambient_light._udp.local."
     // Use compression pointer to instance name
     response[offset] = 0xC0;
     response[offset + 1] = instance_name_offset as u8;
